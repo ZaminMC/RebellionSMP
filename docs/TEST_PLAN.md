@@ -48,6 +48,15 @@ was run 3× consecutively with `--rerun-tasks` to confirm stability.
 4. **Dragon cap / artifact uniqueness** (Phases 5–6): uniqueness races,
    idempotent death processing, restart mid-event reconciliation — the exact
    adversarial matrix from master prompt §14.
+   - Dragons serverless portion: **automated** — `LineageServiceIT` (real
+     SQLite, 18 tests) covers gateway issuance races, cap races at the
+     configured and hard ceiling, hatch races (concurrent clicks, clones,
+     stale instances, direct-hatch-from-recovery refusal), simultaneous
+     owner+dragon death (exactly one egg), duplicate/stale death events,
+     recovery claim gating (no claimant leak), admin route audit, terminal
+     retirement with slot/gateway staying consumed, and the full restart
+     round-trip. Remaining live-server portions: physical egg delivery/
+     destruction routing and the ADR-0008 experiment set.
 5. **DB outage drills**: unique-asset creation under saturation = fail closed.
 
 ## Manual Paper 26.3 checklist (pre-release gate, not yet run)
@@ -91,3 +100,10 @@ was run 3× consecutively with `--rerun-tasks` to confirm stability.
       `DragonEggFormEvent` (Paper FQN) + gateway emission +
       `hasBeenPreviouslyKilled()` behavior across repeated victories;
       `heal(double)` mid-flight interference.
+- [ ] Dragons lineage flow on Paper 26.3 (after the ADR-0008 gate passes,
+      when the controller/listener layer exists): observed gateway →
+      `issueFromGateway` mints once and `ISSUED_ALREADY` on duplicate;
+      egg PDC stamp round-trip; undeliverable delivery parks in recovery;
+      hatch consumes the item only on service success; owner/dragon death
+      hands the egg to the killer; egg survives lava/void/explosion routing
+      into recovery (item protection listeners — controller phase).

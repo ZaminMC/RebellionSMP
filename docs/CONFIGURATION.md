@@ -174,3 +174,31 @@ ordinary blocks: anyone can break them, and the ward dies with its anchor.
 Hiding/defending anchors is gameplay the plugin deliberately does not
  adjudicate. This is enforced structurally (ADR-0007): the ward schema has
 no fields that could express protection.
+
+### Dragons (RebellionDragons — persistence layer, ADR-0009)
+
+```yaml
+dragons:
+  # Maximum obtainable pet-dragon lineages across the ENTIRE server
+  # (all worlds combined). Default 20, hard ceiling 20: the End has at
+  # most 20 eligible vanilla gateways, so a larger value is rejected at
+  # load time - never silently stretched. Boss victories at the cap
+  # follow vanilla rewards but mint nothing.
+  max-lineages: 20
+```
+
+Load rules (validated by `DragonsConfigTest`):
+
+- `dragons.max-lineages` must be an integer in `1..20`. `0`, negatives and
+  anything `> 20` fail config load with an actionable message naming the
+  ceiling — the cap "cannot silently exceed the End gateway/lineage
+  policy" (master prompt §5.6).
+- As defense in depth, `LineageService` clamps the effective cap to the
+  same ceiling at runtime even if a caller bypasses loader validation
+  (proven by `LineageServiceIT.capCannotSilentlyExceedTheHardPolicyCeiling`).
+- Retirement never frees slots and no config value can revive a retired
+  lineage: retired rows keep consuming their slot and gateway anchor.
+- Ride speed, fireball budgets, pearl-heal tuning and water-weakness
+  values are intentionally absent until the ADR-0008 live-server proofs
+  are recorded; shipping tuned-looking numbers for unproven behavior
+  would be guesswork.

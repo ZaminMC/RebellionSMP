@@ -254,3 +254,60 @@ restart re-detects insiders as fresh entries; idle pairs prune after
 
 Measured pipeline costs live in `docs/PERFORMANCE.md` (no TPS claims —
 no live server in this environment; live profiling is the Phase 11 gate).
+
+## Dragons module (rebellion-dragons, Phase 5 — persistence layer only)
+
+ADR-0008 (spike) + ADR-0009 (lineage registry). The module currently
+ships exactly what the master prompt's phase ordering allows before the
+live-server proofs: the API probe/spike test and the gateway-backed
+lineage persistence layer. **No controller, listeners, commands or egg-item
+protection exist yet** — those are gated on the ADR-0008 live experiment
+set on a real Paper 26.3 server (mount feel, steering, death timing,
+vanilla gateway/egg emission, pearl healing).
+
+**Authority**: `LineageService` — transactional registry + in-memory
+mirror (by id / by egg instance / by entity / by gateway), same
+strategy as teams/wards (database is the durable authority; mirror
+updates only after commit; `loadAll` rebuilds at enable).
+
+**Mint path** (the only insert): `issueFromGateway(world, gateway x/y/z,
+victor)` — idempotent per observed vanilla gateway anchor
+(`UNIQUE (origin_world, gateway_x, gateway_y, gateway_z)`), count-checked
+inside the transaction against the effective cap
+(`dragons.max-lineages`, default 20, hard ceiling 20 clamped at config
+load AND at runtime — the End gateway ring is finite). Slot ordinals
+allocate as `MAX(slot)+1` with a UNIQUE backstop and bounded fresh-
+transaction retry.
+
+**Transfers, not mints** (all pure UPDATEs):
+
+- `hatch` — CAS on the live `egg_instance` and `state = 'EGG_HELD'`;
+  binds a fresh `entity_uuid` (UNIQUE) and the hatch-time health
+  snapshot. Recovery eggs cannot hatch directly — they exit only via
+  claim (recorded claimant) or admin route, both re-issuing the
+  instance, so pre-park clones always lose.
+- `processDeath` — CAS on the bound `entity_uuid`; valid killer receives
+  the re-issued egg, no valid killer parks in `EGG_RECOVERY` with the
+  last owner as claimant. Simultaneous owner-death + dragon-death and
+  duplicate events resolve to exactly one egg (`EGG_RETURN_NOOP`).
+- `markEggUndeliverable` / `claimRecoveredEgg` / `adminRouteEgg` — the
+  protected recovery mailbox flows; claim is claimant-gated and does not
+  reveal the claimant; every route is audited with the acting admin.
+- `retire` — audited, terminal, keeps the slot and the gateway consumed
+  (the backing gateway does not respawn).
+
+**Audit**: every real mutation appends one `rb_dragons_audit` row in the
+same transaction (ISSUE, HATCH, DEATH_RETURN, PARK_RECOVERY, CLAIM,
+ADMIN_ROUTE, RETIRE); idempotent no-ops write nothing. `auditTrail` is
+the admin forensics read.
+
+**Persistence**: `rb_dragons_lineages` + `rb_dragons_audit` (module key
+`dragons`, migration v1, portable SQLite/MySQL DDL) — see
+`docs/DATA_MODEL.md` for column semantics and `docs/STATE_MACHINES.md`
+for the transition table.
+
+**Config**: `DragonsConfig` — deliberately minimal (`dragons.max-lineages`
+only); ride/fireball/pearl tuning values arrive with the controller phase
+so no number ships unproven. Plugin wiring (plugin.yml, boot, service
+registration) lands with the controller; `config.yml` ships now to
+document the contract.

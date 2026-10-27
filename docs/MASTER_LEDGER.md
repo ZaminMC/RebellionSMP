@@ -50,6 +50,11 @@ its owning module has tests passing in `./gradlew test`.
 | %rebellion_nearest_ward_distance%, %rebellion_ward_count% | rebellion-wards | tested | own-network intel only; decoys/inactive excluded |
 | Wards map marker provider (default off) | rebellion-wards | tested | publishes only when map-markers.publish-wards: true, active real wards only |
 | Dragon 26.3 controller spike (API surface probe + report) | rebellion-dragons | tested | DragonApi263SpikeTest against pinned paper-api 26.3.226; ADR-0008; production controls gated on live experiments |
+| Dragon lineage registry: 20 gateway-backed slots (rb_dragons_lineages) | rebellion-dragons | tested | ADR-0009; UNIQUE gateway/slot/entity backstops; rows mint only via issueFromGateway; cap clamped at load AND runtime |
+| Lineage idempotency: issuance/hatch/death CAS transitions | rebellion-dragons | tested | LineageServiceIT (18, real SQLite): gateway races resolve ISSUED_ALREADY; hatch races one winner (HATCH_CONFLICT losers); simultaneous owner+dragon death = exactly one egg |
+| Lineage recovery mailbox (park/claim/admin route) | rebellion-dragons | tested | claimant-gated claim (no claimant leak); admin route audited; recovery eggs exit only via claim/route (fresh instance each) |
+| Lineage retirement (audited, terminal) | rebellion-dragons | tested | RETIRED refuses every other transition; slot + gateway stay consumed (retire never frees a slot); rb_dragons_audit per mutation |
+| Dragons config contract (dragons.max-lineages) | rebellion-dragons | tested | DragonsConfigTest: 1..20 loud validation; ceiling clamps even bypassing loaders; shipped config.yml documents it |
 
 ## Roadmap (from master prompt §18)
 
@@ -60,7 +65,7 @@ its owning module has tests passing in `./gradlew test`.
 | 2 | Item identity, rarity registry, lore service, talisman tiers, DeluxeMenus-shaped menus | annotation flows complete and opt-in; PAPI item placeholder shipped; custom item registry with talisman family examples shipped; remaining: per-menu open_command registration, admin audit/recovery views over inventories, talisman activation mechanics |
 | 3 | Teams, chat, friendly-fire attribution | implemented + tested (unit level); live-server verification planned |
 | 4 | No-claim wards, calibrated distance, intel | implemented + tested (unit level); km display disabled until calibrated; measured pipeline costs in docs/PERFORMANCE.md; live-server verification planned |
-| 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | spike delivered (ADR-0008: verified API surface, two removals found, live-experiment gate defined); production controls intentionally blocked until live proofs; lineage registry schema is next serverless step |
+| 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | spike delivered (ADR-0008: verified API surface, two removals found, live-experiment gate defined); production controls intentionally blocked until live proofs; lineage registry persistence layer delivered and tested (ADR-0009: registry, CAS idempotency for issue/hatch/death, recovery mailbox, audited retirement); remaining: ADR-0008 live experiments, then controller + egg-item listeners + commands |
 | 6 | Three dimension artifacts + Rebellion event | planned |
 | 7 | Rare souls, rituals, tracking | planned |
 | 8 | Brewing progression, potion bags, automation | planned |
@@ -95,3 +100,15 @@ its owning module has tests passing in `./gradlew test`.
 - No live Paper 26.3 runtime in this environment: the ward pipeline
   (movement sampling, anchor raytrace, alert rendering) and teams/wards
   integration need the documented manual smoke pass.
+
+Session additions (2026-10-28, dragons persistence layer):
+
+- The dragons module has NO plugin wiring yet (no plugin.yml, boot,
+  commands or listeners): installing it as a server plugin is not a
+  supported state until the controller phase lands after the ADR-0008
+  live proofs. The persistence layer is exercised through the tested
+  service surface (`LineageServiceIT`).
+- Physical egg-item protection (lava/void/explosion/hopper/despawn
+  routing) is controller-phase work; the registry models undeliverable
+  copies via the recovery mailbox so the persistence side is complete,
+  but no Bukkit listener enforces it yet.

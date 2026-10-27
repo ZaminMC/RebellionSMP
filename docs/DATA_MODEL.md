@@ -141,3 +141,64 @@ with typed outcomes, never half-states. The in-memory mirror (spatial
 index + anchor map) is updated only after commit and rebuilt by a full
 read at enable (`WardService.loadAll`); detection state is ephemeral by
 design (see ADR-0007).
+
+## Dragon lineage registry (module key `dragons`, migration v1 — ADR-0009)
+
+`rb_dragons_lineages` — one row per lineage ever minted (hard cap 20):
+
+- `lineage_id CHAR(36) PK` — immutable server-issued lineage UUID.
+- `slot INT` — allocation ordinal (`MAX(slot)+1` inside the mint
+  transaction), `UNIQUE`. Never reused, never shifts on ownership change;
+  operators see "lineage #7", never a raw UUID.
+- `state VARCHAR(16)` — `EGG_HELD`, `EGG_RECOVERY`, `HATCHED` or `RETIRED`.
+  Every transition is a compare-and-set UPDATE pinned on the expected prior
+  state plus the live egg/entity identity.
+- `owner CHAR(36) NULL` — current egg holder or dragon owner; NULL only for
+  `RETIRED`.
+- `egg_instance CHAR(36)` — the PDC instance stamp the physical egg item
+  must carry. Fresh on every (re)issue/claim/route, so cloned and stale
+  copies can never win the hatch compare-and-set. Kept on retirement for
+  forensics.
+- `entity_uuid CHAR(36) NULL` — the bound living pet entity; present only
+  while `HATCHED`; `UNIQUE` (one lineage per living entity). Cleared by the
+  death-cycle transition, which is what makes duplicate death events
+  idempotent: the CAS pins the entity, so the second event affects zero
+  rows.
+- `origin_world VARCHAR(64)`, `gateway_x/y/z INT` — the observed vanilla
+  End gateway anchor that minted the row.
+  `UNIQUE (origin_world, gateway_x, gateway_y, gateway_z)` is the
+  gateway-validity guard and the issuance idempotency key: one gateway
+  position mints exactly one lineage, ever — duplicate victory events,
+  listener re-registrations and event retries all settle here.
+- `health DOUBLE NULL` — hatch-time health snapshot while `HATCHED`.
+- `last_pearl_heal_utc BIGINT` — reserved persistence anchor for pearl-heal
+  cooldowns (controller phase; default 0).
+- `created_at_utc`, `updated_at_utc BIGINT`.
+
+`rb_dragons_audit` — append-only audit trail (`id CHAR(36) PK`,
+`lineage_id`, `action` ∈ {ISSUE, HATCH, DEATH_RETURN, PARK_RECOVERY,
+CLAIM, ADMIN_ROUTE, RETIRE}, `actor` NULL for system actions,
+`detail VARCHAR(255)`, `at_utc`). One row per real mutation, written in
+the same transaction; idempotent no-ops write nothing. Indexed by
+`lineage_id` and `at_utc` for admin forensics.
+
+Structural guarantees (all proven by `LineageServiceIT` over real SQLite):
+
+- **Only issuance inserts.** Transfers (death/claim/route) and hatches are
+  pure UPDATEs; the row count can only grow through the gateway-keyed,
+  count-checked mint. The cap (config `dragons.max-lineages`, default 20,
+  hard ceiling 20 enforced at config load AND runtime) therefore cannot be
+  exceeded by any gameplay path, and retirement never frees a slot — the
+  physical gateway that backed the lineage does not respawn.
+- **One egg per death.** The death CAS replaces the HATCHED row's egg
+  identity with a fresh instance instead of inserting anything, so
+  simultaneous owner-death + dragon-death handling produce exactly one egg
+  (`EGG_RETURN_NOOP` for every loser).
+- **One dragon per egg.** The hatch CAS pins the live `egg_instance` and
+  only accepts `EGG_HELD`; recovery eggs exit exclusively through the
+  claimant-gated claim or the audited admin route (both re-issue the
+  instance), so pre-park clones can never hatch out of the mailbox.
+
+The in-memory mirror (by id / by egg instance / by entity / by gateway)
+is updated only after commit and rebuilt by `LineageService.loadAll()` at
+enable — same strategy as teams/wards.

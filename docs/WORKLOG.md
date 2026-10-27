@@ -328,3 +328,101 @@ wards-do-not-protect-land statement.
   egg minting.
 - Optional polish: live-server smoke checklist entries for teams + wards in
   docs/TEST_PLAN.md; command-layer regression harness shared by modules.
+
+---
+
+## 2026-10-28 — Session 5: Phase 5 continued — lineage registry persistence layer
+
+Branch: `develop`. Author: Abasing. Baseline: develop @ dbd69e3, 261 tests
+green (verified with `./gradlew test --rerun-tasks` before any change).
+
+**Context**
+- Master prompt re-read from remote (unchanged, 615 lines). ADR-0008
+  explicitly blesses the 20-lineage registry schema as persistence-only
+  serverless work that does not depend on the live-server proofs; the
+  live experiment set (mount feel, steering, death timing, gateway/egg
+  emission, pearl healing) remains the gate for production dragon
+  controls and was NOT attempted in this environment (no live server).
+
+**Done**
+- ADR-0009: dragon lineage registry design — gateway-backed 20-slot
+  registry (UNIQUE origin_world+gateway_x/y/z as the issuance
+  idempotency key / gateway-validity guard; UNIQUE slot ordinals;
+  UNIQUE entity binding), compare-and-set state transitions for
+  hatch/death (egg_instance / entity_uuid pinned), recovery mailbox
+  (park/claim/route), audited terminal retirement, slot+gateway stay
+  consumed on retire, cap double-enforced (config validation 1..20 at
+  load + runtime clamp in the mint transaction).
+- rebellion-dragons persistence layer: `Lineage` record (invariants:
+  HATCHED requires entity, owner null only when RETIRED),
+  `LineageState`, `LineageOutcome`/`LineageResult` (with explicit
+  `mutated` flag so idempotent no-ops are distinguishable from real
+  state changes), `LineagePolicy` (HARD_CEILING 20),
+  `DragonsConfig` (minimal by design — only `dragons.max-lineages`;
+  controller-phase tuning values deliberately absent until proven),
+  `DragonsSchema` v1 (`rb_dragons_lineages` + `rb_dragons_audit`,
+  portable DDL, module key `dragons`), `LineageStore` (CAS statement
+  constants, dialect-spanning unique-violation classification),
+  `LineageService` (transactional authority + by-id/by-egg/by-entity/
+  by-gateway mirror; bounded fresh-transaction retry for slot-ordinal
+  races; audit row written in the same transaction as every mutation).
+- Security-shaped design decisions surfaced during implementation and
+  locked in: hatch accepts ONLY `EGG_HELD` (a pre-park cloned egg can
+  never hatch out of the recovery mailbox — claim/route re-issue the
+  instance); claim refusals do not reveal the recorded claimant;
+  `byEggInstance` resolves only while the lineage actually IS an egg;
+  retirement keeps the last egg instance for forensics but gates all
+  use on state.
+- Tests: `LineageServiceIT` — 18 integration tests over real SQLite via
+  Core's actual DatabaseService: sequential slot minting + audit trail;
+  argument validation before DB; same-gateway idempotency (sequential,
+  different victor, concurrent race → exactly one lineage); cap races
+  (3-of-5 distinct gateways, cap-after); hard-ceiling clamp with a
+  bypassing config (fills 20, refuses the 21st); hatch happy path +
+  concurrent clicks (one winner); clone/stale eggs always lose
+  (pre-hatch clone, post-hatch original, post-death stale stamp);
+  recovery direct-hatch refusal; death→killer transfer with fresh
+  stamp and mirror cleanup; simultaneous owner+dragon death → one egg
+  + one audit row; duplicate/stale death events as typed no-ops;
+  no-killer recovery with owner as claimant + wrong-claimant refusal;
+  idempotent parking; admin route (held+recovery, audited, never a
+  living dragon); retirement terminality (everything refused, slot and
+  gateway stay consumed); full restart round-trip (all four states,
+  identity stamps, lifecycle continues, audit persists).
+  `DragonsConfigTest` — 7 tests: default 20, configurable lower, loud
+  errors at 0 and 21, runtime ceiling clamp, shipped resource valid.
+- Docs: ADR-0009; DATA_MODEL (registry + audit tables + structural
+  guarantees); STATE_MACHINES (lineage lifecycle transition table with
+  CAS guards and idempotency outcomes); ARCHITECTURE (dragons module
+  section, explicit "persistence layer only" scope); CONFIGURATION
+  (dragons.max-lineages contract); TEST_PLAN (automated coverage note +
+  live gates for the lineage flow); MASTER_LEDGER (6 new tested rows,
+  Phase 5 roadmap updated, truthful limitation notes: no plugin wiring
+  yet, physical egg protection is controller-phase).
+
+**Commands/results**
+- `./gradlew :rebellion-dragons:test` — 28 tests, 0 failures (18 IT +
+  7 config + 3 spike), stable across `--rerun-tasks`.
+- Full-suite verification and the commit/push happen at session close
+  (see next entry append if the session continues).
+
+**Honest limitations**
+- No live Paper 26.3 server in this environment: the ADR-0008 experiment
+  set is still open and blocks the controller, egg-item protection
+  listeners, commands and plugin wiring. Nothing here claims verified
+  Paper 26.3 runtime behavior.
+- The persistence layer is reachable only through the tested service
+  surface right now; the module builds but is not an installable
+  feature plugin (deliberate — no placeholder plugin presented as
+  functionality).
+
+**Next task (for the next session)**
+- Phase 5 remaining, in order: run the ADR-0008 live experiments on a
+  real Paper 26.3 server and record results in TEST_PLAN; then the
+  controller slice (mount/steering/death presentation) + egg-item
+  protection listeners + `/dragon` command family + DragonsPlugin
+  wiring over the existing LineageService.
+- Serverless parallel candidate if live work is blocked: Phase 6
+  groundwork — ADR-0010 dimension-artifact state machine schema (same
+  persistence-first style), or the teams/wards live-smoke checklist
+  expansion.
