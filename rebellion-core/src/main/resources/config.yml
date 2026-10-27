@@ -1,0 +1,21 @@
+# RebellionCore configuration.
+# All values are validated at startup; invalid values disable Core with a
+# precise error instead of falling back silently.
+
+schema-version: 1
+
+# Extra diagnostic logging. Never enable permanently in production.
+debug: false
+
+# How long feature modules may wait for the database bootstrap (pool + schema
+# migrations) during server startup, in seconds. Only slow remote databases
+# approach this; local SQLite finishes in milliseconds.
+startup-timeout-seconds: 30
+
+diagnostics:
+  # Directory (inside plugins/RebellionCore/) that receives diagnostic reports.
+  directory: diagnostics
+  # Rotation: only the newest reports are kept.
+  max-report-files: 10
+  # How many recent incidents are kept in memory for inclusion in reports.
+  recent-incident-capacity: 100

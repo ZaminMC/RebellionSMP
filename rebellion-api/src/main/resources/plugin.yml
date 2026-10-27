@@ -1,0 +1,8 @@
+name: RebellionAPI
+version: '${version}'
+main: net.zaminmc.rebellion.api.RebellionApiPlugin
+api-version: '26.3'
+load: STARTUP
+description: Shared API contracts for the RebellionSMP plugin family. Provides one runtime class identity for all Rebellion modules.
+authors: [Abasing]
+website: https://github.com/ZaminMC/RebellionSMP

@@ -1,0 +1,50 @@
+# RebellionCore database configuration.
+#
+# backend:
+#   sqlite - zero setup. The SQLite JDBC driver ships with the Paper server.
+#   mysql  - external MySQL 8/9 server. The MySQL Connector/J driver ships with
+#            the Paper server; only connection settings live here.
+#
+# Credentials support environment expansion: ${ENV_NAME} or ${ENV_NAME:fallback}.
+# Keep passwords out of this file and out of version control.
+
+schema-version: 1
+
+backend: sqlite
+
+sqlite:
+  # Path is resolved against plugins/RebellionCore/. The directory must exist or
+  # be creatable by the server process.
+  file: rebellion.sqlite
+
+mysql:
+  host: localhost
+  port: 3306
+  database: rebellion
+  username: rebellion
+  # Prefer ${REBELLION_DB_PASSWORD} over a literal value.
+  password: ${REBELLION_DB_PASSWORD:}
+  # Extra JDBC connection properties appended to the URL, e.g.
+  #   sslMode: REQUIRED
+  # Keys/values are passed through verbatim; invalid names fail at startup.
+  properties: {}
+
+pool:
+  # SQLite is capped at exactly ONE pooled connection by design: SQLite allows a
+  # single writer, and serializing access eliminates "database is locked" errors.
+  # The value below applies to MySQL.
+  max-pool-size: 10
+  min-idle: 2
+  connection-timeout-ms: 5000
+  max-lifetime-ms: 1800000
+
+executor:
+  # Bounded async persistence executor shared by all modules.
+  # queue-capacity is the hard backpressure limit: when full, operations are
+  # rejected with no side effects and an incident is recorded.
+  pool-size: 4
+  queue-capacity: 2000
+
+migrations:
+  # Fail startup when a checksum of an already-applied migration changed.
+  strict-checksums: true

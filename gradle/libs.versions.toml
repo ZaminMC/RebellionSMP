@@ -1,0 +1,31 @@
+# Central dependency versions. Verified against upstream repositories on 2026-10-28.
+# Every entry must stay pinned; bump deliberately and re-verify compatibility.
+
+[versions]
+# io.papermc.paper:paper-api on https://repo.papermc.io — latest 26.3 stable build.
+# Verified: class files are major version 69 (Java 25), apiVersioning.json reports
+# currentApiVersion "26.3".
+paper = "26.3.build.226-stable"
+
+# HikariCP is NOT bundled with the Paper server (verified against paper-26.3-226.jar
+# library listing) and must be shaded + relocated into RebellionCore.
+# Apache-2.0, compatible with this project's GPL-3.0.
+hikaricp = "7.1.0"
+
+# Match the driver version bundled by the Paper 26.3 server so tests exercise the
+# exact runtime driver. The driver itself is NOT shipped in our JARs.
+sqlite-jdbc = "3.49.1.0"
+
+placeholderapi = "2.12.3"
+junit = "6.1.3"
+shadow = "9.6.1"
+
+[libraries]
+paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
+hikaricp = { module = "com.zaxxer:HikariCP", version.ref = "hikaricp" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
+placeholderapi = { module = "me.clip:placeholderapi", version.ref = "placeholderapi" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+
+[plugins]
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }

@@ -1,0 +1,39 @@
+name: RebellionCore
+version: '${version}'
+main: net.zaminmc.rebellion.core.RebellionCorePlugin
+api-version: '26.3'
+# STARTUP so the database bootstrap runs before any POSTWORLD feature module enables.
+load: STARTUP
+depend: [RebellionAPI]
+softdepend: [PlaceholderAPI]
+description: Core lifecycle, configuration, database, migrations, diagnostics and admin commands for RebellionSMP.
+authors: [Abasing]
+website: https://github.com/ZaminMC/RebellionSMP
+
+commands:
+  rebellion:
+    description: RebellionSMP administration and diagnostics.
+    permission: rebellion.admin
+    usage: /rebellion <status|modules|diagnose|reload>
+
+permissions:
+  rebellion.admin:
+    description: Parent permission for all RebellionSMP admin commands.
+    default: op
+    children:
+      rebellion.admin.status: true
+      rebellion.admin.modules: true
+      rebellion.admin.diagnose: true
+      rebellion.admin.reload: true
+  rebellion.admin.status:
+    description: Allows /rebellion status.
+    default: op
+  rebellion.admin.modules:
+    description: Allows /rebellion modules.
+    default: op
+  rebellion.admin.diagnose:
+    description: Allows /rebellion diagnose.
+    default: op
+  rebellion.admin.reload:
+    description: Allows /rebellion reload (configuration and messages; database requires restart).
+    default: op
