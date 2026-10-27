@@ -30,6 +30,8 @@ its owning module has tests passing in `./gradlew test`.
 | Annotation flows: block drops, crafting output, smithing output, container open | rebellion-items | implemented | config-gated (default off); event-bounded, no scans |
 | Placeholder contributor architecture (module-routed `rebellion` expansion) | rebellion-api + rebellion-core | implemented | api: PlaceholderContributor; core: CorePlaceholders routes via ServicesManager |
 | `%rebellion_rarity_<material>%` placeholder | rebellion-items | tested | pure registry read; junk input → null (PAPI leaves text untouched) |
+| Custom item registry (items.yml: named items, talisman families, unique instances) | rebellion-items | tested | CustomItemLoaderTest; factory is the only sanctioned creation path |
+| /rebellionitems give <defined-id> [player] | rebellion-items | implemented | restricted mint: defined items only, admin permission, logged |
 
 ## Roadmap (from master prompt §18; nothing below is implemented)
 
@@ -37,7 +39,7 @@ its owning module has tests passing in `./gradlew test`.
 |---|---|---|
 | 0 | Inspect, research, ledgers, ADRs | researched (this commit set) |
 | 1 | Foundation + module loader contracts | implemented + tested (unit level) |
-| 2 | Item identity, rarity registry, lore service, talisman tiers, DeluxeMenus-shaped menus | annotation flow set complete (join/pickup/block-drops/crafting/smithing/container-open, all opt-in); PAPI item placeholder shipped; remaining: per-menu open_command registration, custom item registry (items.yml), admin audit/recovery views |
+| 2 | Item identity, rarity registry, lore service, talisman tiers, DeluxeMenus-shaped menus | annotation flows complete and opt-in; PAPI item placeholder shipped; custom item registry with talisman family examples shipped; remaining: per-menu open_command registration, admin audit/recovery views over inventories, talisman activation mechanics |
 | 3 | Teams, chat, friendly-fire attribution | planned |
 | 4 | No-claim wards, calibrated distance, intel | planned |
 | 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | planned |
@@ -50,11 +52,12 @@ its owning module has tests passing in `./gradlew test`.
 
 ## Known limitations (truthful, current)
 
-- All annotation flows exist behind opt-in switches; their live ItemMeta
-  behavior is a manual Paper-26.3 verification gate (documented in
-  TEST_PLAN). The custom item registry (items.yml: named custom items with
-  talisman families) is not implemented yet; the identity contract reserves
-  the keys for it.
+- All annotation flows exist behind opt-in switches; the custom item
+  factory's live ItemStack behavior (PDC stamping, glint, instance ids) is a
+  manual Paper-26.3 verification gate (documented in TEST_PLAN).
+- Talismans are definable and mintable but have no activation mechanics
+  yet — the family examples exist to prove the identity/tier contract, not
+  gameplay (Phase 7 scope).
 - MySQL/MariaDB path has no integration test (no server available in CI);
   SQLite is the exercised backend. Not advertised as tested.
 - The plugin has not yet been booted on a live Paper 26.3 server in this

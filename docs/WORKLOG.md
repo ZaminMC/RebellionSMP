@@ -196,3 +196,34 @@ Branch: `develop`. Author: Abasing.
 - Custom item registry (`items.yml`: named custom items, talisman families
   with NORMAL/ARTIFACT/RELIC examples), admin inspection views over annotated
   inventories, then Phase 3 (teams) ADR + module scaffold.
+
+---
+
+## 2026-10-28 — Session 2 (final): custom item registry (items.yml)
+
+Branch: `develop`. Author: Abasing.
+
+**Implemented**
+- `items.yml` definitions: named custom items with material, rarity,
+  optional talisman-tier (normal/artifact/relic — separate axis), MiniMessage
+  display name/lore, glint, and `unique` (per-creation instance_id).
+  `CustomItemLoader` validates ids/materials/rarities/tiers with aggregated
+  precise issues; bundled file ships a three-tier Haste talisman family plus
+  a named banner to demonstrate the contract.
+- `CustomItemFactory` — the only sanctioned creation path for plugin-created
+  custom items (verifies base material exists on this server version,
+  fail-closed otherwise; stamps the full identity contract + instance id).
+- `/rebellionitems give <defined-id> [player]` — a RESTRICTED mint: defined
+  items only (no arbitrary combinations), admin permission, console requires
+  an explicit player, every give logged. Tab-completes defined ids.
+- Plugin permission surface updated (`rebellion.items.admin.give`).
+
+**Commands/results**
+- `./gradlew build` — SUCCESS. `./gradlew test --rerun-tasks` — 119 tests,
+  0 failures.
+
+**Next task (for the next session)**
+- Admin audit view over inventories (list annotated/unique stacks),
+  per-menu open_command registration, then Phase 3 (teams): ADR-0005 team
+  schema + rebellion-teams module (atomic membership, invites, friendly-fire
+  attribution, chat).

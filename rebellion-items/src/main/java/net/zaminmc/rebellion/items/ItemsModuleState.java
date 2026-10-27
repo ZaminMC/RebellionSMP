@@ -4,6 +4,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import net.zaminmc.rebellion.items.identity.CustomItemLoader;
+import net.zaminmc.rebellion.items.identity.CustomItemSpec;
 import net.zaminmc.rebellion.items.lore.AnnotateService;
 import net.zaminmc.rebellion.items.lore.LorePlanner;
 import net.zaminmc.rebellion.items.menu.MenuLoader;
@@ -25,12 +27,15 @@ public final class ItemsModuleState {
     private final Logger logger;
     private final RarityLoader rarityLoader = new RarityLoader(RarityLoader.BUKKIT_VALIDATOR);
     private final MenuLoader menuLoader = new MenuLoader(MenuLoader.BUKKIT_VALIDATOR);
+    private final CustomItemLoader customItemLoader =
+            new CustomItemLoader(CustomItemLoader.BUKKIT_VALIDATOR);
     private final MenuRegistry menus;
 
     private volatile ItemsConfig config;
     private volatile RarityRegistry rarities;
     private volatile AnnotateService annotator;
     private volatile LorePlanner planner;
+    private volatile java.util.Map<String, CustomItemSpec> customItems = java.util.Map.of();
 
     public ItemsModuleState(Path dataDirectory, Logger logger) {
         this.dataDirectory = dataDirectory;
@@ -77,6 +82,24 @@ public final class ItemsModuleState {
         }
         RarityLoader.LoadedRarities raritiesResult = rarityLoader.load(raritiesYaml);
         issues.addAll(raritiesResult.issues());
+
+        // items.yml (custom item definitions)
+        try {
+            Path itemsFile = dataDirectory.resolve("items.yml");
+            if (!java.nio.file.Files.exists(itemsFile)) {
+                try (var in = ItemsModuleState.class.getResourceAsStream("/items.yml")) {
+                    java.nio.file.Files.copy(in, itemsFile);
+                }
+            }
+            YamlConfiguration itemsYaml = YamlConfiguration.loadConfiguration(itemsFile.toFile());
+            CustomItemLoader.LoadedCustomItems loadedItems = customItemLoader.load(itemsYaml);
+            issues.addAll(loadedItems.issues());
+            if (loadedItems.valid()) {
+                customItems = loadedItems.items();
+            }
+        } catch (Exception e) {
+            issues.add("items.yml: unreadable: " + e.getMessage());
+        }
 
         // menus
         MenuRegistry.LoadResult menuResult = menus.loadCandidate(cfgResult.config().menuRegistry());
@@ -151,5 +174,10 @@ public final class ItemsModuleState {
 
     public MenuRegistry menus() {
         return menus;
+    }
+
+    /** @return the currently active custom item definitions (immutable). */
+    public java.util.Map<String, CustomItemSpec> customItems() {
+        return customItems;
     }
 }

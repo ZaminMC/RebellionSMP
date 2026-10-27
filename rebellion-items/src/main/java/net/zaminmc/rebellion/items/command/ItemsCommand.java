@@ -10,6 +10,7 @@ import net.zaminmc.rebellion.api.module.ModuleState;
 import net.zaminmc.rebellion.items.menu.MenuHost;
 import net.zaminmc.rebellion.items.ItemsModuleState;
 import net.zaminmc.rebellion.items.menu.MenuSpec;
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -26,7 +27,7 @@ import org.jetbrains.annotations.NotNull;
 public final class ItemsCommand implements CommandExecutor, TabCompleter {
 
     private static final MiniMessage MINI = MiniMessage.miniMessage();
-    private static final List<String> SUBS = List.of("inspect", "annotate", "reload", "status");
+    private static final List<String> SUBS = List.of("inspect", "annotate", "give", "reload", "status");
 
     private final ItemsModuleState state;
     private final ModuleRegistry modules;
@@ -51,6 +52,7 @@ public final class ItemsCommand implements CommandExecutor, TabCompleter {
         return switch (args[0].toLowerCase(java.util.Locale.ROOT)) {
             case "inspect" -> inspect(sender);
             case "annotate" -> annotate(sender);
+            case "give" -> give(sender, args);
             case "reload" -> reload(sender);
             case "status" -> status(sender);
             default -> usage(sender);
@@ -103,6 +105,54 @@ public final class ItemsCommand implements CommandExecutor, TabCompleter {
         send(sender, applied
                 ? "<green>Annotated held stack (idempotent; existing metadata preserved).</green>"
                 : "<red>Not annotated: the stack has no ItemMeta or an unknown item schema.</red>");
+        return true;
+    }
+
+    /**
+     * Restricted mint: creates one stack of a DEFINED custom item only.
+     * There is no arbitrary-combination mint anywhere in this plugin family.
+     */
+    private boolean give(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("rebellion.items.admin.give")) {
+            return deny(sender);
+        }
+        if (args.length < 2) {
+            send(sender, "<red>Usage: /rebellionitems give <item-id> [player]</red>");
+            return true;
+        }
+        String id = args[1].toLowerCase(java.util.Locale.ROOT);
+        var spec = state.customItems().get(id);
+        if (spec == null) {
+            send(sender, "<red>No custom item '" + escape(id) + "' is defined in items.yml.</red>");
+            return true;
+        }
+        Player target;
+        if (args.length >= 3) {
+            target = Bukkit.getPlayerExact(args[2]);
+            if (target == null) {
+                send(sender, "<red>Player '" + escape(args[2]) + "' is not online.</red>");
+                return true;
+            }
+        } else if (sender instanceof Player p) {
+            target = p;
+        } else {
+            send(sender, "<red>Console must specify a player: /rebellionitems give <id> <player></red>");
+            return true;
+        }
+
+        var factory = new net.zaminmc.rebellion.items.lore.CustomItemFactory(
+                spec, state.rarities(), state.annotator(), logger);
+        var stack = factory.create();
+        if (stack == null) {
+            send(sender, "<red>Refused: the item's base material is unavailable on this server version.</red>");
+            return true;
+        }
+        target.getInventory().addItem(stack);
+        send(sender, "<green>Gave one '" + escape(spec.displayName()) + "' (id: " + escape(id)
+                + ", rarity: " + spec.rarityKey() + (spec.tracksInstances() ? ", unique instance stamped"
+                : "") + ") to " + escape(target.getName()) + ".</green>");
+        logger.info(() -> "Admin " + sender.getName() + " gave defined custom item '" + id
+                + "' to " + target.getName());
         return true;
     }
 
@@ -197,6 +247,13 @@ public final class ItemsCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             String prefix = args[0].toLowerCase(java.util.Locale.ROOT);
             return SUBS.stream().filter(s -> s.startsWith(prefix)).toList();
+        }
+        if (args.length == 2 && args[0].equalsIgnoreCase("give")) {
+            String prefix = args[1].toLowerCase(java.util.Locale.ROOT);
+            return state.customItems().keySet().stream()
+                    .filter(id -> id.startsWith(prefix))
+                    .sorted()
+                    .toList();
         }
         return List.of();
     }

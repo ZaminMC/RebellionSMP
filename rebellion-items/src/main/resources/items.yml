@@ -1,0 +1,58 @@
+# RebellionItems custom item definitions.
+#
+# ids: [a-z0-9_]{1,64}. Materials are current Paper 26.3 Material names.
+# 'rarity' must be one of the nine canonical keys from rarities.yml.
+# 'talisman-tier' is optional: normal | artifact | relic — a separate axis
+# from rarity (never conflate them).
+# 'unique: true' stamps a fresh instance_id per created stack; used where
+# duplication matters (talisman instances, future artifacts).
+#
+# These definitions are the only sanctioned source of plugin-created custom
+# items; the admin give command mints defined items only — never arbitrary
+# combinations.
+
+schema-version: 1
+
+items:
+  # Example talisman family: the same concept at all three progression tiers.
+  talisman_haste_normal:
+    material: SUGAR
+    rarity: uncommon
+    talisman-tier: normal
+    display-name: "<green>Talisman of Haste</green>"
+    lore:
+      - "<gray>A faint sweetness. Run a little lighter.</gray>"
+    glint: false
+    unique: true
+
+  talisman_haste_artifact:
+    material: AMETHYST_SHARD
+    rarity: rare
+    talisman-tier: artifact
+    display-name: "<light_purple>Artifact of Haste</light_purple>"
+    lore:
+      - "<gray>Crystallized momentum hums inside.</gray>"
+      - "<dark_gray>Upgraded from the Talisman of Haste.</dark_gray>"
+    glint: true
+    unique: true
+
+  talisman_haste_relic:
+    material: ECHO_SHARD
+    rarity: epic
+    talisman-tier: relic
+    display-name: "<gold>Relic of Haste</gold>"
+    lore:
+      - "<gold>The echo of footsteps that never stopped.</gold>"
+      - "<dark_gray>Apex of the Haste line.</dark_gray>"
+    glint: true
+    unique: true
+
+  # A non-talisman named item (no tier).
+  banner_of_rebellion:
+    material: RED_BANNER
+    rarity: special
+    display-name: "<red>Banner of the Rebellion</red>"
+    lore:
+      - "<red>Carried by those who refuse to kneel.</red>"
+    glint: true
+    unique: true

@@ -36,7 +36,8 @@ arbitrary console passthrough and no "reset all players" utility.
 |---|---|---|---|---|
 | `/rebellionitems` | `inspect` | `rebellion.items.admin.inspect` | no | shows the held stack's RebellionSMP identity (schema, rarity, item id, instance, tier) |
 | `/rebellionitems` | `annotate` | `rebellion.items.admin.annotate` | no | idempotently applies rarity identity + lore to the held stack; refuses unknown schemas |
-| `/rebellionitems` | `reload` | `rebellion.items.admin.reload` | yes | atomic reload of config + rarities + menus; on error the previous state stays active and every issue is printed |
+| `/rebellionitems` | `give <item-id> [player]` | `rebellion.items.admin.give` | yes (player required) | restricted mint of one DEFINED custom item from items.yml — never arbitrary combinations; unique definitions get a fresh instance id; every give is logged |
+| `/rebellionitems` | `reload` | `rebellion.items.admin.reload` | yes | atomic reload of config + rarities + items + menus; on error the previous state stays active and every issue is printed |
 | `/rebellionitems` | `status` | `rebellion.items.admin.status` | yes | annotation mode, override count, registered menus |
 | `/rebellionmenu <menu-id>` | — | `rebellion.items.menu.<menu-id>` | no | opens a registered menu; per-menu permission is enforced server-side at open and click time (visibility is not authorization) |
 
@@ -44,7 +45,7 @@ Items permission nodes (all default op unless noted):
 
 | Node | Scope |
 |---|---|
-| `rebellion.items.admin` | parent of the four admin nodes |
+| `rebellion.items.admin` | parent of the five admin nodes |
 | `rebellion.items.admin.menuconsole` | required (with the config flag) for `[console]` menu actions |
 | `rebellion.items.menu` | base permission for `/rebellionmenu` (default: true); each menu additionally checks `rebellion.items.menu.<menu-id>` |
 

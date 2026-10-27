@@ -62,6 +62,15 @@ names to rarity keys. Unmapped materials — including ones from future
 Minecraft versions — resolve to COMMON by design. Unknown materials/rarities
 are precise load issues.
 
+### items.yml
+Custom item definitions: `items.<id>` with `material`, `rarity` (default
+common), `talisman-tier` (optional: normal/artifact/relic — an axis separate
+from rarity), `display-name` (MiniMessage, defaults to the id), `lore`,
+`glint`, `unique` (stamps a fresh instance_id per created stack). Ids must
+match `[a-z0-9_]{1,64}`; unknown materials/rarities/tiers are precise load
+issues. The bundled file ships a three-tier Haste talisman family and a named
+banner to demonstrate the contract.
+
 ### menus/*.yml
 `menu_title` (MiniMessage), `size` (9–54, multiple of 9), `open_command`
 (validated identifier; see DELUXEMENUS_COMPATIBILITY for the deviation),

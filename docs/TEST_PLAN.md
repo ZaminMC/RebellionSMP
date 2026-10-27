@@ -25,7 +25,9 @@
 | ItemIdentityTest | schema bounds, unknown-rarity/malformed-id/forged-UUID fail-closed parsing, canonical UUID round-trip | identity is the authorization basis for unique assets |
 | LorePlannerTest | append/top/bottom, marker de-dup, human lore preservation, removal pass, null-element safety | re-annotation never duplicates lines or deletes human text |
 | MenuEngineTest | size/slot/amount bounds, duplicate slots, unknown materials/actions/requirements, command slash rules, console gating, requirement-order, registry traversal rejection, atomic reload, bundled menus parse from disk | invalid menus are diagnostics; clicks with failed requirements have zero side effects |
-| ItemsConfigTest | mode/position enums, registry shape, bundled default validity, precise issues | wide modes are explicit opt-ins |
+| ItemsConfigTest | mode/position enums, registry shape, bundled default validity, precise issues, per-flow switches | wide modes are explicit opt-ins |
+| ItemsPlaceholdersTest | rarity placeholder resolution, COMMON fallback, junk input → null, foreign params pass through | placeholders never echo user-controlled junk |
+| CustomItemLoaderTest | bundled family validity, defaults, malformed ids, unknown material/rarity/tier issues, immutability, tier axis ≠ rarity axis | definitions are the only sanctioned mint source |
 
 Run: `./gradlew test` (results in `*/build/reports/tests/test/`).
 
@@ -57,7 +59,10 @@ was run 3× consecutively with `--rerun-tasks` to confirm stability.
 - [ ] PlaceholderAPI present/absent: expansion registers/doesn't; unknown
       placeholders render untouched.
 - [ ] Restart persistence: schema bootstrap is a no-op the second boot.
-- [ ] RebellionItems on Paper 26.3: annotate a held diamond sword twice →
+- [ ] RebellionItems on Paper 26.3: `/rebellionitems give talisman_haste_artifact`
+      → stack carries item_id/rarity/tier/instance_id PDC, glint, styled
+      display name and rarity lore line; a second mint of a unique item gets a
+      DIFFERENT instance id; annotate a held diamond sword twice →
       exactly one rarity lore line, display name/enchants preserved;
       `/rebellionmenu item_codex` renders; shift-click/number-key/drag cannot
       remove menu items; `[console]` actions refused without the flag +
