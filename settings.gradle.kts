@@ -40,3 +40,4 @@ rootProject.name = "RebellionSMP"
 
 include("rebellion-api")
 include("rebellion-core")
+include("rebellion-items")

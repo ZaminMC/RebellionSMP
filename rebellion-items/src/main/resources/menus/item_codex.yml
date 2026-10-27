@@ -1,0 +1,81 @@
+# Item codex: an informational menu showing the rarity ladder.
+# Deliberate DeluxeMenus-shaped subset (see docs/DELUXEMENUS_COMPATIBILITY.md).
+
+menu_title: "<gold>Item Codex</gold>"
+size: 27
+open_command: itemcodex
+
+items:
+  common:
+    material: DIRT
+    slot: 9
+    display_name: "<gray>Common</gray>"
+    lore:
+      - "<gray>The default rarity for ordinary materials.</gray>"
+      - "<dark_gray>Dirt, glass bottles, cobblestone…</dark_gray>"
+    left_click_commands:
+      - "[message] <gray>Common: fallback for unmapped materials.</gray>"
+  uncommon:
+    material: IRON_INGOT
+    slot: 10
+    display_name: "<green>Uncommon</green>"
+    lore:
+      - "<green>Notably better than common finds.</green>"
+    left_click_commands:
+      - "[message] <green>Uncommon rarity.</green>"
+  rare:
+    material: HEART_OF_THE_SEA
+    slot: 11
+    display_name: "<blue>Rare</blue>"
+    lore:
+      - "<blue>Sought-after rewards.</blue>"
+    left_click_commands:
+      - "[message] <blue>Rare rarity.</blue>"
+  epic:
+    material: DIAMOND_SWORD
+    slot: 12
+    display_name: "<light_purple>Epic</light_purple>"
+    lore:
+      - "<light_purple>Combat-grade treasure.</light_purple>"
+    left_click_commands:
+      - "[message] <light_purple>Epic rarity.</light_purple>"
+  legendary:
+    material: ELYTRA
+    slot: 13
+    display_name: "<gold>Legendary</gold>"
+    lore:
+      - "<gold>Server-famous assets.</gold>"
+    left_click_commands:
+      - "[message] <gold>Legendary rarity.</gold>"
+  mythic:
+    material: DRAGON_EGG
+    slot: 14
+    display_name: "<red>Mythic</red>"
+    lore:
+      - "<red>Once-per-server stories.</red>"
+    left_click_commands:
+      - "[message] <red>Mythic rarity.</red>"
+  special:
+    material: NETHER_STAR
+    slot: 15
+    display_name: "<aqua>Special</aqua>"
+    lore:
+      - "<aqua>Unique, event-born items.</aqua>"
+    left_click_commands:
+      - "[message] <aqua>Special rarity.</aqua>"
+  very_special:
+    material: ENCHANTED_GOLDEN_APPLE
+    slot: 16
+    display_name: "<dark_aqua>Very Special</dark_aqua>"
+    lore:
+      - "<dark_aqua>Exceptional even among specials.</dark_aqua>"
+    left_click_commands:
+      - "[message] <dark_aqua>Very Special rarity.</dark_aqua>"
+  god:
+    material: NETHERITE_INGOT
+    slot: 17
+    display_name: "<gradient:#ffd700:#ff4500>God</gradient>"
+    lore:
+      - "<gradient:#ffd700:#ff4500>The apex. Handle with intent.</gradient>"
+    left_click_commands:
+      - "[message] <gradient:#ffd700:#ff4500>God rarity.</gradient>"

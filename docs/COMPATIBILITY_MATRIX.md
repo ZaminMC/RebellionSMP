@@ -25,3 +25,4 @@ Runtime plugin-family matrix (today):
 |---|---|---|---|
 | RebellionAPI | STARTUP | — | — |
 | RebellionCore | STARTUP | RebellionAPI | PlaceholderAPI |
+| RebellionItems | POSTWORLD | RebellionAPI, RebellionCore | — |

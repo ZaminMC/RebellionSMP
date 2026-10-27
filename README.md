@@ -14,10 +14,11 @@ Early development on the `develop` branch. Currently implemented:
 |---|---|---|
 | RebellionAPI | `RebellionAPI-<version>.jar` | shared contracts (database, module registry, results) — tested |
 | RebellionCore | `RebellionCore-<version>.jar` | lifecycle, config/message loaders, SQLite/MySQL persistence, migrations, diagnostics, `/rebellion` admin command, PlaceholderAPI expansion — tested |
+| RebellionItems | `RebellionItems-<version>.jar` | rarity registry + resolver, PDC item identity, lore annotation, talisman tiers, DeluxeMenus-shaped menu engine with two bundled menus — tested |
 
-Feature modules (items/rarity, teams, wards, dragons, artifacts, rituals,
-alchemy, prison, cosmetics) are planned and not yet built — see
-`docs/MASTER_LEDGER.md` for the phase roadmap and current status.
+Feature modules (teams, wards, dragons, artifacts, rituals, alchemy, prison,
+cosmetics) are planned and not yet built — see `docs/MASTER_LEDGER.md` for the
+phase roadmap and current status.
 
 ## Requirements
 
@@ -36,7 +37,8 @@ alchemy, prison, cosmetics) are planned and not yet built — see
 
 1. `RebellionAPI-<version>.jar` → `plugins/` (STARTUP)
 2. `RebellionCore-<version>.jar` → `plugins/` (STARTUP, depends on RebellionAPI)
-3. Feature module JARs as they become available (POSTWORLD)
+3. `RebellionItems-<version>.jar` (POSTWORLD, depends on API + Core)
+4. Further feature module JARs as they become available (POSTWORLD)
 
 RebellionCore creates `plugins/RebellionCore/` with `config.yml`,
 `database.yml`, and `messages.yml` on first boot. SQLite works with zero setup;

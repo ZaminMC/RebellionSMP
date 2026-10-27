@@ -1,11 +1,23 @@
 # DeluxeMenus compatibility subset
 
-**Status: researched; menu engine not yet implemented (planned for Phase 2 —
-`rebellion-items`).** This file documents the schema we will implement, based
-on the current DeluxeMenus source (MIT) and its published wiki (inspected
-2026-10-27; see REFERENCE_LEDGER). It will be updated to match what actually
-ships and any gap will be listed as unsupported — no false claims of full
+**Status: first release implemented in `rebellion-items` (Phase 2), unit
+tested without a live server; live-inventory interaction is verified against
+the manual checklist in TEST_PLAN.** The schema matches the current
+DeluxeMenus source (MIT) and its published wiki (inspected 2026-10-27; see
+REFERENCE_LEDGER). Gaps are listed as unsupported — no claims of full
 compatibility.
+
+## Deliberate deviations (documented, first release)
+
+- Menus are opened through one fixed command `/rebellionmenu <menu-id>` with
+  per-menu permission `rebellion.items.menu.<menu-id>`; per-menu
+  `open_command` values are parsed and validated but are not individually
+  registered as top-level server commands yet (follow-up issue, tracked in
+  the ledger).
+- `[sound]` actions use Minecraft sound registry keys (e.g.
+  `ui.button.click`), not the deprecated legacy `Sound` constants.
+- `[console]` actions require BOTH `menus.allow-console-actions: true` and
+  the clicking player holding `rebellion.items.admin.menuconsole`.
 
 ## Registry pattern (supported)
 

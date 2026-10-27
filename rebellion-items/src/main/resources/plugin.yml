@@ -1,0 +1,45 @@
+name: RebellionItems
+version: '${version}'
+main: net.zaminmc.rebellion.items.RebellionItemsPlugin
+api-version: '26.3'
+# POSTWORLD: item flows operate on loaded worlds; Core (STARTUP) is up first.
+load: POSTWORLD
+depend: [RebellionAPI, RebellionCore]
+description: Item identity, rarity registry, lore annotation, talisman tiers and the DeluxeMenus-shaped menu engine.
+authors: [Abasing]
+website: https://github.com/ZaminMC/RebellionSMP
+
+commands:
+  rebellionitems:
+    description: RebellionItems administration (inspect, annotate, reload, status).
+    permission: rebellion.items.admin
+    usage: /rebellionitems <inspect|annotate|reload|status>
+  rebellionmenu:
+    description: Open a RebellionSMP menu by id.
+    permission: rebellion.items.menu
+    usage: /rebellionmenu <menu-id>
+
+permissions:
+  rebellion.items.admin:
+    description: Parent permission for RebellionItems administration.
+    default: op
+    children:
+      rebellion.items.admin.inspect: true
+      rebellion.items.admin.annotate: true
+      rebellion.items.admin.reload: true
+      rebellion.items.admin.status: true
+  rebellion.items.admin.inspect:
+    description: Allows /rebellionitems inspect (held stack identity diagnostics).
+    default: op
+  rebellion.items.admin.annotate:
+    description: Allows /rebellionitems annotate (apply rarity lore + identity to held stack).
+    default: op
+  rebellion.items.admin.reload:
+    description: Allows /rebellionitems reload.
+    default: op
+  rebellion.items.admin.status:
+    description: Allows /rebellionitems status.
+    default: op
+  rebellion.items.menu:
+    description: Allows opening RebellionSMP menus; individual menus check rebellion.items.menu.<menu-id>.
+    default: true

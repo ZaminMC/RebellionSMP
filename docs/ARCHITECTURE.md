@@ -7,15 +7,19 @@ prompt.
 ## Module graph (implemented)
 
 ```
-rebellion-api   (plugin JAR: RebellionAPI, load: STARTUP)
-    └── rebellion-core (plugin JAR: RebellionCore, load: STARTUP, depend: [RebellionAPI],
-                        softdepend: [PlaceholderAPI])
+rebellion-api    (plugin JAR: RebellionAPI, load: STARTUP)
+    └── rebellion-core (plugin JAR: RebellionCore, load: STARTUP,
+                        depend: [RebellionAPI], softdepend: [PlaceholderAPI])
+            └── rebellion-items (plugin JAR: RebellionItems, load: POSTWORLD,
+                                 depend: [RebellionAPI, RebellionCore])
 ```
 
-Planned feature modules attach as siblings below Core via
+Further feature modules attach as siblings of `rebellion-items` below Core via
 `depend: [RebellionAPI, RebellionCore]` — see the master prompt §6 for the
 target layout. Modules never import each other's implementation classes;
-capabilities cross module boundaries through Bukkit's `ServicesManager`.
+capabilities cross module boundaries through Bukkit's `ServicesManager`
+(e.g. RebellionItems registers its `AnnotateService` there for other modules
+to resolve).
 
 ## Runtime identity contract
 
@@ -102,6 +106,38 @@ reported with an incident ID) → pool closed → services unregistered.
   refusal, transactional application on SQLite, and a durable
   `rb_schema_migrations` bookkeeping table. A failed migration fails the
    bootstrap and blocks dependent modules.
+
+## Item identity + menu engine (rebellion-items)
+
+- **Rarity registry** (`RarityRegistry`): data-driven from `rarities.yml`;
+  explicit per-material overrides; every unmapped material (including ones
+  from future Minecraft updates) safely resolves to COMMON. Server-free:
+  keyed on material names, validated against the real registry at runtime via
+  an injected validator.
+- **Item identity** (`ItemIdentity`): versioned PDC contract under the
+  `rebellion` namespace (`schema`, `rarity`, `item_id`, `instance_id`,
+  `talisman_tier`). Forged values fail closed: unknown schemas, non-canonical
+  instance UUIDs (round-trip checked — `UUID.fromString` alone is too
+  lenient), malformed ids and unknown tiers are all rejected. The
+  Bukkit-facing `AnnotateService` is a thin adapter over this contract.
+- **Lore annotation** (`LorePlanner` + `AnnotateService`): marker-based
+  de-duplication (invisible sentinel) so re-annotation never duplicates
+  lines; human lore is never silently deleted; display names, enchants,
+  custom model data, other plugins' PDC entries and amounts are untouched.
+  Flows are config-gated (`custom-only` / `managed-items` / `all-items`;
+  join normalization and pickup are opt-in). Stacks with a future/unknown
+  schema are skipped (fail closed).
+- **Menu engine** (`MenuLoader`/`MenuRegistry`/`MenuHost`/`MenuEvaluator`):
+  DeluxeMenus-shaped subset. Registry in `config.yml` (`gui_menus.<id>.file`),
+  one file per menu under `menus/`. Validation is aggregated with precise
+  paths (unknown materials/actions/requirements are diagnostics, never
+  guesses); atomic reload keeps the previous menus when a candidate is
+  invalid; requirement evaluation strictly precedes actions; every click and
+  drag on a menu inventory is cancelled (no shift-click/number-key/drag/
+  cursor loopholes); `[console]` actions are double-gated (config flag +
+  `rebellion.items.admin.menuconsole`); sounds use registry keys, not the
+  deprecated constants; menu visibility is not authorization (per-menu
+  permission re-checked server-side at open and click time).
 
 ## Module health model
 

@@ -1,0 +1,73 @@
+# RebellionItems rarity definitions.
+#
+# The nine canonical rarity keys below are the only valid keys under
+# 'rarities:'. Display names/colors/weights are data-driven; 'weight' is the
+# relative selection weight used by future loot systems (>= 0), 'glint' adds
+# the enchant glint on annotated stacks where supported.
+#
+# Material overrides live under 'materials:' (current Material names).
+# Materials without an override resolve to COMMON by design — including
+# materials introduced by future Minecraft versions, so the registry never
+# breaks on an update.
+
+schema-version: 1
+
+rarities:
+  COMMON:
+    display-name: "Common"
+    color: "<gray>"
+    weight: 100
+    glint: false
+  UNCOMMON:
+    display-name: "Uncommon"
+    color: "<green>"
+    weight: 50
+    glint: false
+  RARE:
+    display-name: "Rare"
+    color: "<blue>"
+    weight: 20
+    glint: false
+  EPIC:
+    display-name: "Epic"
+    color: "<light_purple>"
+    weight: 8
+    glint: true
+  LEGENDARY:
+    display-name: "Legendary"
+    color: "<gold>"
+    weight: 3
+    glint: true
+  MYTHIC:
+    display-name: "Mythic"
+    color: "<red>"
+    weight: 1
+    glint: true
+  SPECIAL:
+    display-name: "Special"
+    color: "<aqua>"
+    weight: 0
+    glint: true
+  VERY_SPECIAL:
+    display-name: "Very Special"
+    color: "<dark_aqua>"
+    weight: 0
+    glint: true
+  GOD:
+    display-name: "God"
+    color: "<gradient:#ffd700:#ff4500>"
+    weight: 0
+    glint: true
+
+# Per-material overrides. Missing entries fall back to COMMON.
+materials:
+  DIAMOND_SWORD: EPIC
+  NETHERITE_INGOT: LEGENDARY
+  ELYTRA: LEGENDARY
+  TOTEM_OF_UNDYING: LEGENDARY
+  DRAGON_EGG: MYTHIC
+  NETHER_STAR: SPECIAL
+  ENCHANTED_GOLDEN_APPLE: VERY_SPECIAL
+  HEART_OF_THE_SEA: RARE
+  BREEZE_ROD: RARE
+  SHULKER_SHELL: RARE

@@ -101,3 +101,64 @@ Branch: `develop`. Author: Abasing.
   with de-duplication, talisman tier scaffolding, DeluxeMenus-shaped item
   codex menu, config validation, and the first module-bootstrap integration
   with Core's service registry.
+
+---
+
+## 2026-10-28 — Session 2 (continued): Phase 2 first vertical slice — rebellion-items
+
+Branch: `develop`. Author: Abasing.
+
+**Implemented (module `rebellion-items`, plugin JAR RebellionItems)**
+- Rarity axis: `Rarity` enum (9 canonical keys), `RarityRegistry` with
+  data-driven styles + per-material overrides + safe COMMON fallback for
+  unmapped materials (incl. future versions); `RarityLoader` with injected
+  material validator (serverless-testable), aggregated precise issues.
+- Item identity contract: versioned PDC keys (`rebellion:schema|rarity|
+  item_id|instance_id|talisman_tier`); `ItemIdentity.parse` fails closed on
+  unknown schemas, malformed ids, unknown tiers and non-canonical instance
+  UUIDs. Hardened during testing: `UUID.fromString` accepts padded
+  non-canonical forms (probed on JDK 25), so parsing now requires a
+  `toString()` round-trip equality check.
+- Lore annotation: generic `LorePlanner` (marker-based de-dup, top/bottom
+  position, removal pass, human-lore preservation) + `AnnotateService`
+  (Bukkit adapter: preserves display name/enchants/CMD/other PDC/amounts;
+  skips stacks with unknown schemas — fail closed) + `AnnotationListener`
+  (config-gated join normalization and pickup flows using the supported
+  `PlayerAttemptPickupItemEvent`; the classic pickup event is deprecated in
+  26.3 — verified by reflection probe).
+- Menu engine: `MenuLoader` (DeluxeMenus-shaped subset, aggregated
+  validation, per-field diagnostics), `MenuRegistry` (gui_menus registry,
+  traversal rejection, atomic reload keeping previous menus on invalid
+  candidates), `MenuEvaluator` (requirements before actions; console actions
+  double-gated), `MenuHost` (InventoryHolder; cancels every click/drag;
+  sounds via registry keys not deprecated constants), bundled menus
+  (item codex 27 slots, talisman guide 18 slots).
+- Module bootstrap: config/messages/rarities/menus loading with bundled
+  resource copy, Core ModuleRegistry integration via `RebellionApi`,
+  AnnotateService published through the ServicesManager; commands
+  `/rebellionitems inspect|annotate|reload|status` and `/rebellionmenu`.
+
+**Commands/results**
+- `./gradlew build` — SUCCESS (all three modules).
+- `./gradlew test --rerun-tasks` — 62+41 tests, 0 failures.
+- Serverless-verification probes (JDK 25): Material/ItemMeta require server
+  registries (ExceptionInInitializerError) → Bukkit-facing code kept as
+  thin adapters; `UUID.fromString` leniency probe → canonical check added;
+  pickup-event deprecation probe → correct event chosen.
+- MockBukkit web check: latest supports MC 1.21 only — not usable for 26.3;
+  recorded in TEST_PLAN as a documented gap with the manual gate instead.
+
+**Honest gaps (tracked, not hidden)**
+- Annotation flows still missing: block drops, crafting/smithing output,
+  container-access normalization (config switches exist for none of them;
+  join + pickup only). Listed as follow-up in MASTER_LEDGER.
+- `open_command` per-menu registration not implemented (parsed/validated
+  only); menus open via `/rebellionmenu <id>` — documented deviation.
+- No PAPI item placeholders yet (`%rebellion_rarity_<material>%` etc.).
+- Live-server behavior (ItemMeta mutation, inventory click safety) is a
+  manual Paper-26.3 checklist gate (TEST_PLAN).
+
+**Next task**
+- Complete the remaining annotation flows (drops, crafting output,
+  container access) behind explicit config switches; add PAPI item
+  placeholders; then Phase 3 (teams) planning ADR.

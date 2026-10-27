@@ -38,6 +38,37 @@ tags are rejected at load with the offending key. Runtime placeholders
 validation. Missing keys fall back to bundled defaults (reported, non-fatal).
 Prefix is the `prefix` key and is prepended by `msg()`.
 
+## RebellionItems
+
+### config.yml
+| Key | Type | Default | Notes |
+|---|---|---|---|
+| `schema-version` | int | 1 | |
+| `annotation.mode` | enum | `custom-only` | `custom-only` / `managed-items` / `all-items`; the last is a wide metadata mutation policy and must be a deliberate opt-in |
+| `annotation.lore-position` | enum | `bottom` | `top` or `bottom` |
+| `annotation.flows.join-normalization` | bool | false | one bounded pass over the joining player's held stacks |
+| `annotation.flows.pickup` | bool | false | annotate eligible picked-up stacks |
+| `menus.allow-console-actions` | bool | false | also requires `rebellion.items.admin.menuconsole` at click time |
+| `gui_menus.<id>.file` | string | — | DeluxeMenus-shaped registry; one file per menu under `menus/` |
+
+### rarities.yml
+Nine canonical rarity keys (COMMON…GOD) with `display-name`, `color`
+(MiniMessage), `weight` (>= 0), `glint`; `materials:` overrides map material
+names to rarity keys. Unmapped materials — including ones from future
+Minecraft versions — resolve to COMMON by design. Unknown materials/rarities
+are precise load issues.
+
+### menus/*.yml
+`menu_title` (MiniMessage), `size` (9–54, multiple of 9), `open_command`
+(validated identifier; see DELUXEMENUS_COMPATIBILITY for the deviation),
+`items` with `material`, `slot`/`slots`, `amount` (1–64), `display_name`,
+`lore`, view/left/right requirements (`has permission`) and click action
+lists (`[close]`, `[message]`, `[sound]` (registry key), `[player] /cmd`,
+`[console] /cmd`).
+
+### messages.yml
+Same closed-tag MiniMessage contract as Core.
+
 ## Validation behavior (all loaders)
 
 - YAML syntax error → module fails to enable (fail closed, actionable message).

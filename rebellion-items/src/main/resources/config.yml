@@ -1,0 +1,35 @@
+# RebellionItems configuration.
+# Invalid values disable the module at startup with precise errors.
+
+schema-version: 1
+
+annotation:
+  # Which stacks the annotator may touch.
+  #   custom-only    - only plugin-created custom items (rebellion:item_id present)
+  #   managed-items  - custom items plus any stack this plugin family manages
+  #   all-items      - every eligible stack passing through the flows below.
+  #                    Explicit opt-in: this is a wide metadata mutation policy.
+  mode: custom-only
+
+  # Where the rarity line is placed in the lore: top or bottom.
+  lore-position: bottom
+
+  flows:
+    # Normalize a player's inventory once at join (bounded: visits each held
+    # stack once; no per-tick work). off by default.
+    join-normalization: false
+    # Annotate eligible stacks when picked up.
+    pickup: false
+
+menus:
+  # Console actions ([console] in menu files) are refused unless this is true
+  # AND the clicking player has rebellion.items.admin.menuconsole.
+  allow-console-actions: false
+
+# DeluxeMenus-shaped registry: one entry per menu, one file per menu in
+# plugins/RebellionItems/menus/.
+gui_menus:
+  item_codex:
+    file: item_codex.yml
+  talisman_guide:
+    file: talisman_guide.yml

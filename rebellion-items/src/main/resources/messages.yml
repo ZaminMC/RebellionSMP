@@ -1,0 +1,28 @@
+# RebellionItems messages. MiniMessage; every tag explicitly closed (the
+# loader validates this). Placeholders like <value> are filled by code.
+
+prefix: "<gradient:#c0392b:#8e44ad>Rebellion</gradient> <dark_gray>»</dark_gray> <gray></gray>"
+
+common:
+  no-permission: "<red>You do not have permission to do that.</red>"
+  player-only: "<red>Only players can use this.</red>"
+
+inspect:
+  none: "<gray>No RebellionSMP identity on the held stack.</gray>"
+  header: "<gold>RebellionSMP item identity</gold>"
+  line: "<gray>schema: <white><schema></white>, rarity: <white><rarity></white>, item id: <white><itemid></white>, instance: <white><instance></white>, tier: <white><tier></white></gray>"
+
+annotate:
+  success: "<green>Annotated held stack (idempotent; existing metadata preserved).</green>"
+  rejected: "<red>Not annotated: the stack has no ItemMeta or an unknown item schema.</red>"
+  hold-stack: "<red>Hold a stack to annotate.</red>"
+
+reload:
+  success: "<green>Reloaded configuration, rarities, messages and menus.</green>"
+  failed: "<red>Reload rejected; previous state stays active. Issues:</red>"
+  issue: "<red>- <issue></red>"
+
+menu:
+  unknown: "<red>No menu '<menuid>' is registered.</red>"
+  usage: "<red>Usage: /rebellionmenu <menu-id></red>"
+  console-denied: "<red>Console actions are disabled on this server.</red>"

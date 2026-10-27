@@ -1,0 +1,50 @@
+# Talisman guide: explains the NORMAL → ARTIFACT → RELIC progression tier.
+# The tier axis is separate from rarity by design (master prompt §5.4).
+
+menu_title: "<gold>Talisman Guide</gold>"
+size: 18
+open_command: talismanguide
+
+items:
+  normal:
+    material: COPPER_INGOT
+    slot: 2
+    display_name: "<gray>Normal Tier</gray>"
+    lore:
+      - "<gray>Base talismans with modest, focused effects.</gray>"
+      - "<dark_gray>Found through ordinary play.</dark_gray>"
+    left_click_commands:
+      - "[message] <gray>Normal talismans: entry tier.</gray>"
+  artifact:
+    material: AMETHYST_SHARD
+    slot: 6
+    display_name: "<light_purple>Artifact Tier</light_purple>"
+    lore:
+      - "<light_purple>Upgraded talismans with stronger activations.</light_purple>"
+      - "<dark_gray>Reached through talisman progression, not rarity.</dark_gray>"
+    left_click_commands:
+      - "[message] <light_purple>Artifact talismans: mid tier.</light_purple>"
+  relic:
+    material: ECHO_SHARD
+    slot: 10
+    display_name: "<gold>Relic Tier</gold>"
+    lore:
+      - "<gold>The final tier: rare activations, real stories.</gold>"
+    left_click_commands:
+      - "[message] <gold>Relic talismans: apex tier.</gold>"
+  tier_vs_rarity:
+    material: WRITABLE_BOOK
+    slot: 14
+    display_name: "<aqua>Why two axes?</aqua>"
+    lore:
+      - "<aqua>Rarity (Common…God) describes how scarce something is.</aqua>"
+      - "<aqua>Tier (Normal/Artifact/Relic) is where a talisman sits in its progression.</aqua>"
+      - "<dark_gray>They never mix in one value.</dark_gray>"
+    left_click_commands:
+      - "[message] <aqua>Tier and rarity are separate axes.</aqua>"
+  close:
+    material: BARRIER
+    slot: 13
+    display_name: "<red>Close</red>"
+    left_click_commands:
+      - "[close]"

@@ -20,6 +20,13 @@ its owning module has tests passing in `./gradlew test`.
 | Module health registry (ModuleRegistry impl) | rebellion-core | tested | ModuleManagerTest |
 | `/rebellion status\|modules\|diagnose\|reload` + tab completion | rebellion-core | implemented | command executor logic; server-level verification planned |
 | PlaceholderAPI expansion (`rebellion`, 4 core placeholders) | rebellion-core | implemented | loads only with PAPI present; runtime check pending |
+| Rarity registry + material resolver (COMMON fallback, data-driven styles) | rebellion-items | tested | RarityLoaderTest; serverless via injected validator |
+| Versioned PDC item identity (fail-closed parsing, canonical UUIDs) | rebellion-items | tested | ItemIdentityTest; Bukkit adapter is thin |
+| Lore annotation (marker de-dup, metadata preservation, config-gated flows) | rebellion-items | tested | LorePlannerTest; stack-level behavior on Paper is a manual gate |
+| Talisman tier axis (NORMAL/ARTIFACT/RELIC, separate from rarity) | rebellion-items | tested | contract test |
+| DeluxeMenus-shaped menu engine (registry, validation, click safety) | rebellion-items | tested | MenuEngineTest; live-inventory interaction is a manual gate |
+| Bundled menus: item codex + talisman guide | rebellion-items | tested | parsed from disk in MenuEngineTest |
+| /rebellionitems inspect\|annotate\|reload\|status, /rebellionmenu <id> | rebellion-items | implemented | command logic; server-level verification planned |
 
 ## Roadmap (from master prompt §18; nothing below is implemented)
 
@@ -27,7 +34,7 @@ its owning module has tests passing in `./gradlew test`.
 |---|---|---|
 | 0 | Inspect, research, ledgers, ADRs | researched (this commit set) |
 | 1 | Foundation + module loader contracts | implemented + tested (unit level) |
-| 2 | Item identity, rarity registry, lore service, talisman tiers, DeluxeMenus-shaped menus | planned — next |
+| 2 | Item identity, rarity registry, lore service, talisman tiers, DeluxeMenus-shaped menus | first slice implemented + tested; remaining annotation flows (drops, crafting output, container access) and PAPI item placeholders follow-up |
 | 3 | Teams, chat, friendly-fire attribution | planned |
 | 4 | No-claim wards, calibrated distance, intel | planned |
 | 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | planned |
@@ -40,7 +47,11 @@ its owning module has tests passing in `./gradlew test`.
 
 ## Known limitations (truthful, current)
 
-- No feature module exists yet; the product has foundation only.
+- The first feature vertical slice (items) exists; its remaining annotation
+  flows (block drops, crafting/smithing output, container access) are not
+  implemented yet — only join normalization and pickup (both opt-in) and the
+  admin annotate command. Stacks' live ItemMeta behavior is a manual
+  Paper-26.3 verification gate (documented in TEST_PLAN).
 - MySQL/MariaDB path has no integration test (no server available in CI);
   SQLite is the exercised backend. Not advertised as tested.
 - The plugin has not yet been booted on a live Paper 26.3 server in this
