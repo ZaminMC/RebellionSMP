@@ -33,15 +33,32 @@ its owning module has tests passing in `./gradlew test`.
 | Custom item registry (items.yml: named items, talisman families, unique instances) | rebellion-items | tested | CustomItemLoaderTest; factory is the only sanctioned creation path |
 | /rebellionitems give <defined-id> [player] | rebellion-items | implemented | restricted mint: defined items only, admin permission, logged |
 
-## Roadmap (from master prompt §18; nothing below is implemented)
+## Wards (rebellion-wards, Phase 4)
+
+| Feature | Owning module | Status | Notes |
+|---|---|---|---|
+| TeamAffiliationService (cache-only team lookups for sibling modules) | rebellion-api | tested | adapter in teams over TeamCache; absence-tolerant consumer side |
+| MapMarker/MapMarkerProvider (privacy-gated web-map surface) | rebellion-api | tested | providers return nothing without an explicit per-category admin gate |
+| No-claim watch ward model (anchor-bound, no protection surface) | rebellion-wards | tested | Ward record cannot express protection; anchor break/explosion removes ward |
+| Calibrated distance service (km gate ships disabled) | rebellion-wards | tested | DistanceServiceTest; uncalibrated worlds can never print "km" |
+| Per-world uniform-grid spatial index (one-cell queries) | rebellion-wards | tested | no-miss property vs linear scan at 500 wards/3000 probes; measured in PERFORMANCE.md |
+| Detection state machine (enter/leave, per-pair cooldowns, dwell, masking, decoys) | rebellion-wards | tested | WardDetectorTest (21) under fixed clocks; tests caught the epoch-0 cooldown defect |
+| Movement sampling (O(1) event marks + cadenced async sweep) | rebellion-wards | tested | MovementFeedTest; ~50 ns/event measured |
+| rb_wards schema + transactional caps + UNIQUE race backstops | rebellion-wards | tested | WardServiceIT (14, real SQLite): concurrent name/anchor/cap races |
+| Alert routing (team/owner/both channels, owner fallback) | rebellion-wards | tested | AlertRouterTest; MiniMessage injection neutralized (parsed component has no click events) |
+| /ward create\|remove\|toggle\|list\|info, /wardadmin list\|remove\|mask | rebellion-wards | implemented | command logic; server-level verification planned |
+| %rebellion_nearest_ward_distance%, %rebellion_ward_count% | rebellion-wards | tested | own-network intel only; decoys/inactive excluded |
+| Wards map marker provider (default off) | rebellion-wards | tested | publishes only when map-markers.publish-wards: true, active real wards only |
+
+## Roadmap (from master prompt §18)
 
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Inspect, research, ledgers, ADRs | researched (this commit set) |
 | 1 | Foundation + module loader contracts | implemented + tested (unit level) |
 | 2 | Item identity, rarity registry, lore service, talisman tiers, DeluxeMenus-shaped menus | annotation flows complete and opt-in; PAPI item placeholder shipped; custom item registry with talisman family examples shipped; remaining: per-menu open_command registration, admin audit/recovery views over inventories, talisman activation mechanics |
-| 3 | Teams, chat, friendly-fire attribution | planned |
-| 4 | No-claim wards, calibrated distance, intel | planned |
+| 3 | Teams, chat, friendly-fire attribution | implemented + tested (unit level); live-server verification planned |
+| 4 | No-claim wards, calibrated distance, intel | implemented + tested (unit level); km display disabled until calibrated; measured pipeline costs in docs/PERFORMANCE.md; live-server verification planned |
 | 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | planned |
 | 6 | Three dimension artifacts + Rebellion event | planned |
 | 7 | Rare souls, rituals, tracking | planned |
@@ -67,3 +84,13 @@ its owning module has tests passing in `./gradlew test`.
 - DeluxeMenus compatibility subset is researched but the menu engine is not
   built; `docs/DELUXEMENUS_COMPATIBILITY.md` documents the researched schema
   and the planned supported subset.
+- Ward detection state (enter/leave, cooldowns) is deliberately ephemeral:
+  after a restart, insiders are re-detected as new entries on first
+  movement. Cooldowns do not survive restarts or world changes (documented
+  in ADR-0007).
+- Ward kilometer display is disabled for every world until an operator
+  calibrates `distance.world-units-per-kilometer` per world
+  (docs/CONFIGURATION.md). Until then distances report in blocks/meters only.
+- No live Paper 26.3 runtime in this environment: the ward pipeline
+  (movement sampling, anchor raytrace, alert rendering) and teams/wards
+  integration need the documented manual smoke pass.

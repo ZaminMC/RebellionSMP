@@ -119,3 +119,66 @@ Player-dependent contributors implement `resolveFor(Player, String)` (added
 with a default method so existing contributors are unaffected); the expansion
 threads the requesting player through. All teams placeholders read the
 hot-path cache only.
+
+## RebellionWards (Phase 4)
+
+Wards are information devices: they report approaching outsiders to the
+owner's team and never protect land, blocks, containers or players
+(ADR-0007). Anchor blocks are ordinary breakable blocks — destroying one is
+the counterplay.
+
+| Command | Subcommand | Permission | Player-only | Behavior |
+|---|---|---|---|---|
+| `/ward` | `create <name> <radius> [decoy]` | `rebellion.wards.use` | yes | binds a ward to the targeted anchor block (configured material, within reach); radius clamped by config bounds; caps (player/team/global) enforced inside the transaction; decoy subflag config-gated |
+| `/ward` | `remove <name>` | `rebellion.wards.use` | yes | removes one of the actor's own/team wards (owner or configured manage rank enforced service-side) |
+| `/ward` | `toggle <name>` | `rebellion.wards.use` | yes | activates/deactivates; both directions reset detection state (re-activation re-detects) |
+| `/ward` | `list` | `rebellion.wards.use` | yes | own + team wards with live status and calibrated distance |
+| `/ward` | `info <name>` | `rebellion.wards.use` | yes | one ward's details incl. reported insider count (suppressed/masked insiders are intentionally invisible) |
+| `/wardadmin` | `list [player]` | `rebellion.wards.admin` | no | every ward, optionally filtered by an ONLINE owner (names never authority) |
+| `/wardadmin` | `remove <id>` | `rebellion.wards.admin` | no | removes any ward by its server-issued UUID |
+| `/wardadmin` | `mask <player> <seconds>` | `rebellion.wards.admin` | no | grants timed ward masking to an ONLINE player (1..86400 s); refuses when `detection.masking.enabled` is false |
+
+Anchor lifecycle (no command involved): breaking the anchor block — or
+destroying it via entity/block explosion — removes the bound ward
+asynchronously and idempotently; the breaker receives honest feedback
+(`You broke the anchor of watch ward '<name>'.`). No protection applies to
+the anchor.
+
+Management rights beyond ownership go through the cached
+`TeamAffiliationService`: the actor must be in the ward's team with a rank
+listed in `wards.manage-ranks` (default leader + officer). Without the
+teams module, only the owner manages.
+
+### Ward alert + countermeasure contract (ADR-0007)
+
+- Outsider = anyone who is neither the ward owner nor a cached teammate of
+  the ward's team. Missing teams module or a cold cache counts as outsider
+  (wards alert rather than silently trusting unknown state).
+- Enter alerts fire once per enter/leave cycle; re-entering the same ward
+  within `alerts.realert-cooldown-seconds` (per ward, per player) is
+  silent; a different ward is never throttled by an unrelated pair.
+- `detection.dwell-seconds` delays the enter alert until the player has
+  remained inside that long; leaving earlier produces nothing at all.
+  Masking during the window suppresses the pending alert.
+- Masking (config-gated): holding `detection.masking.held-material` in the
+  main hand, or an admin/ritual timed grant. Masked players never trigger
+  new enter alerts; delivered alerts are never undone; unmasking inside a
+  ward does not retro-detect.
+- Leave notices (config `alerts.notify-leave`) fire only when the enter
+  actually alerted.
+- Alerts route per `alerts.channel` (team/owner/both); the team channel
+  falls back to the owner when the ward is teamless, the teams module is
+  absent, or the team has no online members.
+- Cross-world: wards are world-bound; changing worlds resets that player's
+  detection state (documented behavior, not a bug path).
+
+## PlaceholderAPI placeholders (expansion `rebellion`) — wards
+
+| Placeholder | Value |
+|---|---|
+| `%rebellion_nearest_ward_distance%` | calibrated distance to the nearest own/own-team **active, non-decoy** ward in the viewer's world (`2.4 km` when calibrated, `2400 blocks` otherwise); unset when none |
+| `%rebellion_ward_count%` | number of own/own-team wards |
+
+Own-network intel only: nearest *enemy* ward distance is Phase 7 tracking
+ritual scope and is deliberately not a placeholder. All reads are
+in-memory (index + team cache); no database access.

@@ -208,3 +208,49 @@ ADR-0006 defines the team system:
 - **Commands**: `/team` resolves membership-action targets from online
   Player objects only — names are never authority. Rank grants are code
   rules; permissions gate the command surface, ranks gate the actions.
+
+## Wards module (rebellion-wards, Phase 4)
+
+ADR-0007. A no-claim watch-ward system: information only, structurally
+incapable of protection.
+
+**Pipeline** (performance shape mandated by master prompt §5.2):
+
+- `WardMoveListener` (MONITOR) — block-coordinate compare; meaningful moves
+  do one O(1) `MovementFeed` mark (~50 ns measured). World changes reset
+  that player's detection state; quits drop feed + pairs.
+- `WardSweepTask` (async, `detection.sweep-interval-ticks`) — drains dirty
+  players, adds players with inside tracks (dwell commits need time, not
+  motion), runs one cell query + one pure detector pass per player, zero
+  database reads; alerts batch into one main-thread hop.
+- `WardDetector` — pure, clock-injected state machine: enter/leave cycles,
+  per-(ward, player) cooldowns with a NEVER sentinel, dwell warning delay,
+  masking suppression, decoy labeling. Output type `AlertDecision` makes
+  protection side effects unrepresentable.
+- `WardSpatialIndex` — per-world uniform grid; wards register in every
+  covered cell at insert; queries read one cell; COW sets give the sweep
+  stable snapshots; `compute`-based cell cleanup is race-safe.
+- `AlertRouter` — channel routing (team/owner/both, owner fallback) and
+  calibrated rendering; every interpolated value escaped against
+  MiniMessage injection (tested on the parsed component).
+
+**Persistence**: `rb_wards` (module key `wards`) with UNIQUE
+`(owner, name_norm)` + UNIQUE `(world, x, y, z)` race backstops and
+in-transaction cap checks; the in-memory mirror (index + anchor map)
+updates only after commit, rebuilds via `loadAll` at enable.
+
+**Module integration**: RebellionTeams is soft-depended through the API
+`TeamAffiliationService` (cache-only lookups registered by teams over
+`TeamCache`); without it every non-owner is an outsider and alerts route
+to owners. Map markers publish through the API `MapMarkerProvider` with
+`map-markers.publish-wards` defaulting to false; the Phase 10 web-map
+adapter must re-check the category before rendering anything public.
+
+**Threading**: event marks on main; sweep on async scheduler; persistence
+on Core's bounded executor; in-memory mirror mutations happen on the
+persistence callback path after commit. Detection state is ephemeral —
+restart re-detects insiders as fresh entries; idle pairs prune after
+`max(4 × cooldown, 1 h)`.
+
+Measured pipeline costs live in `docs/PERFORMANCE.md` (no TPS claims —
+no live server in this environment; live profiling is the Phase 11 gate).

@@ -101,3 +101,43 @@ mutation runs in one transaction with the rank check against live rows; the
 UNIQUE constraints are the race backstop — racing double-accepts or duplicate
 names lose with a typed outcome, never a half-state. Cache refresh happens
 only after commit and is composed into the caller's future.
+
+## Wards (module key `wards`, migration v1 — ADR-0007)
+
+`rb_wards` — one row per watch ward, bound to a placed anchor block:
+
+- `id CHAR(36) PK` — server-issued ward UUID.
+- `name VARCHAR(24)` + `name_norm VARCHAR(24)` — display form and the
+  owner-scoped, case-insensitive uniqueness key
+  (`UNIQUE (owner, name_norm)`); charset `[A-Za-z0-9_-]{3,24}` validated
+  before insert.
+- `owner CHAR(36)` — creating player; the only management authority without
+  a team binding.
+- `team_id CHAR(36) NULL` — creator's team at creation time. NULL for
+  teamless owners or when the teams module is absent. Stale ids (team
+  disbanded) are harmless: they can never match a live cache lookup, so the
+  ward degrades to owner-bound.
+- `world VARCHAR(64)`, `x/y/z DOUBLE` — the anchor block's center position
+  (`block + 0.5`). `UNIQUE (world, x, y, z)` enforces one ward per placed
+  anchor across all owners — the race backstop for two players targeting
+  the same block.
+- `radius DOUBLE` — horizontal detection radius in blocks (bounds enforced
+  by config at the service edge).
+- `type VARCHAR(8)` — `WARD` or `DECOY` (decoys detect identically but are
+  labeled in alerts and excluded from own-intel/map surfaces).
+- `active TINYINT` — toggled by `/ward toggle`; inactive wards stay
+  persisted but never detect.
+- `created_at_utc BIGINT`.
+
+Indexes: `rb_wards_owner_idx (owner)`, `rb_wards_team_idx (team_id)`,
+`rb_wards_active_world_idx (active, world)`.
+
+There is deliberately **no protection/region/member table**: a ward is an
+information device (master prompt §5.2). Caps (`max-wards-per-player`,
+`max-wards-per-team`, `max-wards-total`) are checked inside the creation
+transaction, mirroring the teams module's joins-while-full strategy — the
+UNIQUE constraints plus in-transaction counts settle concurrent creates
+with typed outcomes, never half-states. The in-memory mirror (spatial
+index + anchor map) is updated only after commit and rebuilt by a full
+read at enable (`WardService.loadAll`); detection state is ephemeral by
+design (see ADR-0007).

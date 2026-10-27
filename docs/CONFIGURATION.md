@@ -102,3 +102,75 @@ Each feature module ships its own `config.yml` + `messages.yml` (and focused
 files like `items.yml`, `rarities.yml`, `menus/*.yml` where that improves
 editability). No shared mega-config. An API-only module may omit config if it
 genuinely has no settings — RebellionAPI is that exception today.
+
+## RebellionWards
+
+Own `config.yml` under `plugins/RebellionWards/`, validated at load with the
+same atomic-swap semantics as Core (invalid file keeps the previous
+configuration; every issue is printed).
+
+```yaml
+wards:
+  anchor-material: LODESTONE   # ward binds to this placed block
+  create-reach-blocks: 6
+  min-radius: 16.0
+  max-radius: 256.0
+  max-wards-per-player: 3      # in-transaction cap checks
+  max-wards-per-team: 12
+  max-wards-total: 2000        # keeps the spatial index + sweeps cheap
+  manage-ranks: [leader, officer]
+  decoys: { enabled: true }    # labeled alerts; excluded from intel/markers
+detection:
+  sweep-interval-ticks: 20     # movement events only mark; sweeps process
+  dwell-seconds: 0             # warning delay before an enter alert commits
+  masking:
+    enabled: true
+    held-material: AMETHYST_SHARD
+alerts:
+  channel: team                # team | owner | both (owner fallback applies)
+  realert-cooldown-seconds: 300
+  notify-leave: true
+distance:
+  world-units-per-kilometer: {}   # EMPTY = kilometers disabled everywhere
+  uncalibrated-unit: blocks       # blocks | meters
+map-markers:
+  publish-wards: false            # privacy-by-default web-map gate
+```
+
+### Ward distance calibration (mandatory before "km" ever appears)
+
+The kilometer display is **disabled until you calibrate it**. This is the
+defect class the master prompt calls out: mislabeled arbitrary blocks are
+worse than no kilometers. Procedure:
+
+1. Pick two landmarks on your imported Earth map a known real-world
+   distance apart (e.g. two cities 100 km apart).
+2. Take their world coordinates (F3) and compute the horizontal
+   world-coordinate distance between them (square root of dx² + dz²).
+3. `world-units-per-kilometer = coordinate-distance / real-kilometers`.
+4. Set it per world — e.g. `world: 1000.0` for a 1:1000 overworld map;
+   if your nether is 1:8 on that map, its scale is `1000/8 = 125.0`.
+5. Reload/restart. `DistanceService` formats calibrated worlds as
+   `2.4 km` (one decimal below 10 km, integer above) and leaves every
+   other world in blocks/meters.
+
+Rules enforced at load: scales must be finite and inside 1.0..100000.0
+(implausible values are rejected with "do not guess"); each world is
+independent; `uncalibrated-unit` only chooses the label for uncalibrated
+worlds.
+
+Coordinate semantics (documented contract): horizontal plane only (Y
+ignored); cross-world has no distance and no detection (the spatial index
+is per-world); vanilla worlds do not wrap at borders, so distances are
+plain Euclidean — consider border geometry when placing wards near edges.
+Changing worlds resets a player's detection state (they left every ward of
+the old world; the new world detects them fresh).
+
+### No-protection statement (operator-facing)
+
+Wards never prevent movement, block breaking, container access, damage or
+building, and create no claims or protected chunks. Anchor blocks are
+ordinary blocks: anyone can break them, and the ward dies with its anchor.
+Hiding/defending anchors is gameplay the plugin deliberately does not
+ adjudicate. This is enforced structurally (ADR-0007): the ward schema has
+no fields that could express protection.

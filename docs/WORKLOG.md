@@ -274,3 +274,57 @@ Branch: `develop`. Author: Abasing.
 - Optional polish: teams command regression test via a command-layer harness;
   verify /team history pagination; live-server smoke checklist entry in
   docs/TEST_PLAN.md.
+
+---
+
+## Session 4 — Phase 4: wards (no-claim watch wards, calibrated distance, intel)
+
+**Scope (master prompt §18 Phase 4 + §5.2)**: no-claim wards, calibrated
+distance service with the kilometer gate, outsider alerts with spam
+protection, countermeasures (dwell, masking, decoys, channels), optional
+map-marker interface, measured lookup costs, and a documented
+wards-do-not-protect-land statement.
+
+**Work**
+- API contracts: `TeamAffiliationService` (cache-only team lookups for
+  sibling modules; teams registers the adapter over TeamCache) and
+  `MapMarker`/`MapMarkerProvider` (privacy-gated web-map surface).
+  9a96976.
+- rebellion-wards module: anchor-bound `Ward` model with no protection
+  surface; `WardsConfig` validation with the kilometer map shipping EMPTY;
+  `DistanceService` (horizontal-only, cross-world = empty, km gate);
+  per-world uniform-grid `WardSpatialIndex` (one-cell queries, COW
+  snapshots, race-safe cell cleanup); pure `WardDetector` state machine
+  (enter/leave, per-pair cooldowns, dwell, masking, decoys);
+  `MovementFeed` sampling + async sweep; `AlertRouter` channels with owner
+  fallback; anchor break/explosion listeners (the no-claim escape hatch);
+  `rb_wards` schema v1 with UNIQUE(owner, name_norm) + UNIQUE(world, x, y,
+  z) backstops and in-transaction caps; /ward + /wardadmin; own-network-only
+  placeholders; privacy-gated marker provider. 9a96976, 3c1f69c.
+- Test suite: 83 tests. WardDetectorTest (21) under fixed clocks,
+  WardServiceIT (14, real SQLite) with concurrent name/anchor/cap races,
+  spatial-index no-miss property vs linear scan (500 wards / 3000 probes,
+  fixed seed), calibration-gate formatting, alert routing + rendered
+  component carries no click events, feed/masking/placeholder/marker
+  semantics. Tests caught two production defects: the cooldown sentinel
+  (first alert suppressed within 300 s of epoch 0) and the km integer
+  formatting threshold; removed a misleading cross-world-prone overload.
+  3c1f69c.
+- Docs: ADR-0007, PERFORMANCE.md with measured numbers (feed mark ~50 ns,
+  sweep slice 273-671 ns/player at 200-2000 wards), DATA_MODEL/
+  COMMANDS_AND_PERMISSIONS/CONFIGURATION/ARCHITECTURE wards sections,
+  MASTER_LEDGER updated (incl. fixing the stale Phase 3 roadmap row).
+
+**Commands/results**
+- `./gradlew build` — SUCCESS. `./gradlew test --rerun-tasks` — 261 tests,
+  0 failures, stable (core 44, items 88, teams 46, wards 83).
+- `./gradlew :rebellion-wards:wardBenchmark` — measured numbers recorded in
+  docs/PERFORMANCE.md.
+
+**Next task (for the next session)**
+- Phase 5 (dragons): minimal 26.3 controller spike FIRST (passenger/
+  flight/death behavior proof) + test report before any production dragon
+  controls; then the 20-lineage registry, gateway issuance flow, unique
+  egg minting.
+- Optional polish: live-server smoke checklist entries for teams + wards in
+  docs/TEST_PLAN.md; command-layer regression harness shared by modules.
