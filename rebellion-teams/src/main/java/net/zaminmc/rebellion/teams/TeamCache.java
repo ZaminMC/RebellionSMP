@@ -68,6 +68,15 @@ public final class TeamCache {
         teammatesOf(teamId).forEach(action);
     }
 
+    /**
+     * Snapshot of every online member of a team; empty when the team has no
+     * online members. Backs the {@code TeamAffiliationService} adapter used
+     * by cross-module consumers (e.g. ward alert routing).
+     */
+    public Set<UUID> onlineMembers(UUID teamId) {
+        return teammatesOf(teamId);
+    }
+
     /** @return true when both players are loaded and in the same team. */
     public boolean sameTeam(UUID a, UUID b) {
         Optional<Snapshot> sa = lookup(a).flatMap(o -> o);

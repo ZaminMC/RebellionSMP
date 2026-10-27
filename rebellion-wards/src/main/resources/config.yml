@@ -1,0 +1,82 @@
+# RebellionWards configuration.
+#
+# IMPORTANT - WHAT WARDS ARE NOT: watch wards are an information tool only.
+# They never prevent movement, block breaking, container access, damage or
+# building, and they create no territory, claims or protected chunks. Anchor
+# blocks are ordinary blocks anyone can break; hiding and defending them is
+# gameplay. Every value below is validated at load; an invalid file keeps the
+# previous configuration active and reports precise issues.
+
+wards:
+  # Block type a ward binds to at creation (player must target one within
+  # create-reach-blocks). Breaking the anchor removes the ward.
+  anchor-material: LODESTONE
+  # How far the /ward create ray reaches for the anchor block.
+  create-reach-blocks: 6
+  # Detection radius bounds per ward (blocks, horizontal).
+  min-radius: 16.0
+  max-radius: 256.0
+  # Hard caps enforced inside the creation transaction (races included).
+  max-wards-per-player: 3
+  max-wards-per-team: 12
+  # Global bound - keeps the spatial index and sweeps cheap.
+  max-wards-total: 2000
+  # Team ranks allowed to manage (remove/toggle) wards bound to their team.
+  # Ward owners always manage their own wards. Ranks are teams-module
+  # vocabulary; without RebellionTeams only owners manage.
+  manage-ranks: [leader, officer]
+  decoys:
+    # Decoys are cheap fake wards: detection is identical, but alerts are
+    # labeled for the owning team and decoys never feed nearest-ward
+    # placeholders or map markers.
+    enabled: true
+
+detection:
+  # Sweep cadence in ticks. Movement events only mark players dirty; the
+  # sweep processes dirty players (plus anyone inside a ward awaiting a
+  # dwell-delayed alert). 20 ticks = once per second.
+  sweep-interval-ticks: 20
+  # Warning delay in seconds: a player must remain inside the radius this
+  # long before the enter alert fires. 0 = alert on first sight. Masking
+  # during the window suppresses the alert.
+  dwell-seconds: 0
+  masking:
+    # Master switch for masking countermeasures.
+    enabled: true
+    # Holding this material in the main hand makes a player undetectable by
+    # wards (new detections; a pending dwell alert is also suppressed).
+    # A Bukkit Material name, validated at load.
+    held-material: AMETHYST_SHARD
+
+alerts:
+  # Where enter/leave alerts go: team | owner | both.
+  channel: team
+  # After an enter alert for (ward, player), re-entering the same ward stays
+  # quiet for this many seconds (per-ward, per-player).
+  realert-cooldown-seconds: 300
+  # Also notify when a detected outsider leaves the radius (one notice per
+  # completed enter/leave cycle - inherently cooldown-free by state machine).
+  notify-leave: true
+
+distance:
+  # PER-WORLD world-units-per-kilometer calibration. MUST be calibrated
+  # against the imported Earth map before enabling (docs/CONFIGURATION.md,
+  # "Ward distance calibration"). Leave empty to keep kilometers disabled:
+  # distances then report in the uncalibrated-unit below and nothing is ever
+  # labeled "km". Never guess a scale - that is the exact defect this gate
+  # exists to prevent.
+  #
+  # Example (only after measuring on YOUR worlds):
+  #   world-units-per-kilometer:
+  #     world: 1000.0
+  #     world_nether: 125.0
+  world-units-per-kilometer: {}
+  # Label used when kilometers are not calibrated for a world: blocks | meters.
+  # "meters" assumes the vanilla 1 block = 1 m convention.
+  uncalibrated-unit: blocks
+
+map-markers:
+  # Privacy-by-default: ward positions are never published to a web-map
+  # adapter unless this is explicitly true here. The adapter re-checks this
+  # category before rendering anything public.
+  publish-wards: false

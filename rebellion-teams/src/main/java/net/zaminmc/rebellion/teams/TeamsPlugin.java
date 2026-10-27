@@ -7,6 +7,7 @@ import net.zaminmc.rebellion.api.database.RebellionDatabase;
 import net.zaminmc.rebellion.api.module.ModuleDescriptor;
 import net.zaminmc.rebellion.api.module.ModuleRegistry;
 import net.zaminmc.rebellion.api.module.ModuleState;
+import net.zaminmc.rebellion.api.teams.TeamAffiliationService;
 import net.zaminmc.rebellion.teams.chat.ChatTracker;
 import net.zaminmc.rebellion.teams.command.ChatCommand;
 import net.zaminmc.rebellion.teams.command.TeamCommand;
@@ -103,10 +104,15 @@ public final class TeamsPlugin extends JavaPlugin {
         chatCommand.setExecutor(channelExecutor);
         chatCommand.setTabCompleter(channelExecutor);
 
-        // 7. Placeholders + module health -------------------------------------
+        // 7. Placeholders + cross-module affiliation + module health ---------
         getServer().getServicesManager().register(
                 net.zaminmc.rebellion.api.placeholder.PlaceholderContributor.class,
                 new TeamsPlaceholders(service), this, ServicePriority.Normal);
+        // Cache-backed team affiliation for sibling modules (wards etc.);
+        // absence-tolerant on the consumer side (ADR-0007).
+        getServer().getServicesManager().register(
+                TeamAffiliationService.class,
+                new TeamAffiliationAdapter(service.cache()), this, ServicePriority.Normal);
 
         modules.update("teams", ModuleState.OPERATIONAL, "");
         logger.info("RebellionTeams " + getPluginMeta().getVersion()

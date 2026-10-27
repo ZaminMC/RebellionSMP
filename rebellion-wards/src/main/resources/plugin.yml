@@ -1,0 +1,30 @@
+name: RebellionWards
+version: '${version}'
+main: net.zaminmc.rebellion.wards.WardsPlugin
+api-version: '26.3'
+# POSTWORLD: wards load from the database after Core's bootstrap (awaited via
+# applyModuleMigrations). RebellionTeams is deliberately soft-depend: without
+# it, every non-owner is an outsider and alerts route to the ward owner only.
+load: POSTWORLD
+depend: [RebellionAPI, RebellionCore]
+softdepend: [RebellionTeams]
+description: No-claim watch wards - proximity intel with calibrated distances, cooldowns and countermeasures. Wards report information only; they never protect land.
+authors: [Abasing]
+website: https://github.com/ZaminMC/RebellionSMP
+
+commands:
+  ward:
+    description: Watch ward management (create at a placed anchor, remove, toggle, list, info).
+    usage: /ward <create|remove|toggle|list|info>
+  wardadmin:
+    description: RebellionWards administration (list, remove, timed masking).
+    usage: /wardadmin <list [player]|remove <id>|mask <player> <seconds>>
+    permission: rebellion.wards.admin
+
+permissions:
+  rebellion.wards.use:
+    description: Allows creating and managing one's own watch wards (service still enforces ownership and team ranks).
+    default: true
+  rebellion.wards.admin:
+    description: Allows administering any watch ward (list, remove, grant timed masking).
+    default: op
