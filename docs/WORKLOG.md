@@ -227,3 +227,50 @@ Branch: `develop`. Author: Abasing.
   per-menu open_command registration, then Phase 3 (teams): ADR-0005 team
   schema + rebellion-teams module (atomic membership, invites, friendly-fire
   attribution, chat).
+
+---
+
+## 2026-10-28 — Session 3: Phase 2 closure + Phase 3 (teams)
+
+Branch: `develop`. Author: Abasing.
+
+**Implemented**
+- Phase 2 follow-ups: `/rebellionitems audit <player>` (live read-only view of
+  identity-tagged stacks across armor/offhand/storage/ender chest with
+  server-free InventoryAudit planner) and per-menu `open_command` commands
+  via `MenuCommandBridge` (Paper `Server#getCommandMap`; duplicate refusal,
+  collision refusal, clean reload/disable; registry rejects duplicate
+  open_commands across menus atomically). 7a19f18.
+- ADR-0005: module-owned late migrations (`MigrationSpec`,
+  `RebellionDatabase.applyModuleMigrations`); `MigrationRunner.applyModule`
+  with idempotent registration, checksum verification, downgrade refusal;
+  DatabaseService gates on the bootstrap future and applies on the bounded
+  executor. +3 DatabaseServiceTest cases.
+- ADR-0006 + rebellion-teams module: teams schema v1 (portable DDL, UUID
+  keys, UNIQUE backstops, cascade disband, surviving history),
+  TeamService (atomic mutations with in-transaction rank checks + history row,
+  typed outcome mapping, cooldowns + invite rate limits persisted, cache
+  refresh composed into caller futures), TeamCache hot path,
+  FriendlyFirePolicy matrix + attribution adapter (player/projectile/pet/
+  cloud/TNT verified against paper-api 26.3), chat channels
+  (global/team/proximity) over AsyncChatEvent with rate gate, /team + /chat
+  commands (online-only target resolution), teams placeholders via the new
+  player-aware `resolveFor` contributor default method. dcd4363.
+- Test suite: TeamServiceIT (16 real-SQLite integration tests incl. the
+  double-accept race, joins-while-full, rank matrix, disband cascade,
+  cooldowns via fixed clocks, cache-mirrors-authority),
+  FriendlyFirePolicyTest (9), ChatRouter/TeamCache/TeamNames/TeamsConfig
+  tests. Service fixes found by the tests: cache refreshes composed into
+  returned futures; re-invites bypass the queue cap. 5bc622f.
+
+**Commands/results**
+- `./gradlew build` — SUCCESS. `./gradlew test --rerun-tasks` — 173 tests,
+  0 failures, stable (core 44, items 88, teams 41).
+
+**Next task (for the next session)**
+- Phase 4 (wards): ADR-0007 ward schema + rebellion-wards module (spatial
+  index, calibrated distances — km display disabled until configured —
+  enter/leave state tracking, alert cooldowns, countermeasures config).
+- Optional polish: teams command regression test via a command-layer harness;
+  verify /team history pagination; live-server smoke checklist entry in
+  docs/TEST_PLAN.md.

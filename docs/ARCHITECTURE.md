@@ -171,3 +171,40 @@ No per-player threads exist. Long-lived caches key by UUID only.
 - The persistence queue is the single backpressure point: saturation rejects
   work deterministically instead of queueing unbounded or blocking the
   caller.
+
+## Teams module (rebellion-teams, Phase 3)
+
+ADR-0005 made schema ownership modular: modules ship `MigrationSpec` sets and
+call `RebellionDatabase.applyModuleMigrations("teams", ...)` at enable — the
+call waits (bounded) for the Core bootstrap, then registers, checksum-verifies
+and applies the set on the persistence executor. Failure is fatal for the
+module only (module health FAILED, plugin disables itself); Core keeps
+running. This is the first database-backed feature module and the reference
+pattern for every later module.
+
+ADR-0006 defines the team system:
+
+- **Authority**: the database. `UNIQUE(rb_teams.name_norm)` stops duplicate
+  names; `UNIQUE(rb_team_members.player)` enforces one team per player;
+  `UNIQUE(rb_team_invites(team_id, invitee))` bounds invites. Every mutation
+  is one transaction that re-reads ranks from live rows, so no interleaving
+  can outrun the rank checks. Racing callers receive typed outcomes
+  (`NAME_TAKEN`, `ALREADY_IN_TEAM`, …), never half-states.
+- **Hot path**: `TeamCache` holds per-online-player snapshots (team, rank,
+  friendly-fire, ally set) plus a team→players index. Join loads it, every
+  mutation refreshes the affected snapshots (composed into the caller's
+  future), quit evicts. Damage and chat events never touch the database.
+- **Friendly fire**: `FriendlyFirePolicy` is a pure decision matrix
+  (unit-tested); the Bukkit adapter resolves the attacking player through
+  the chain player → projectile shooter → tamed pet owner → area-effect-cloud
+  source → TNT igniter (all verified against paper-api 26.3). Unresolvable
+  sources stay allowed.
+- **Chat**: `/chat` switches global/team/proximity; preferences persist in
+  `rb_chat_settings`. Team chat routes to online teammates through Paper's
+  `AsyncChatEvent` viewer set; proximity filters same-world players by
+  horizontal radius from the event's own recipient snapshot (never a global
+  player scan). Non-global channels are rate limited per player. Global chat
+  is untouched vanilla behavior. Voice chat is out of scope by design.
+- **Commands**: `/team` resolves membership-action targets from online
+  Player objects only — names are never authority. Rank grants are code
+  rules; permissions gate the command surface, ranks gate the actions.

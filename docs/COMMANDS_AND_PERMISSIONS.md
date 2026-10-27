@@ -68,3 +68,54 @@ is present. Modules contribute parameters by registering a
 `PlaceholderContributor` with the ServicesManager; Core's expansion routes
 lookups through every contributor at request time (registration order; no
 parameter name collisions between modules).
+
+## RebellionTeams commands
+
+| Command | Subcommand | Permission | Console? | Behavior |
+|---|---|---|---|---|
+| `/team` | `create <name>` | `rebellion.teams.use` | no | creates a team (leader = creator); name must be 3–24 chars of `[A-Za-z0-9_]`, not reserved, globally unique; create cooldown per player |
+| `/team` | `invite <player>` | `rebellion.teams.use` + officer rank | no | invites an ONLINE player (UUID comes from the live Player object, never the name); rate limited; invitee queue capped; re-invites refresh the expiry |
+| `/team` | `accept [team]` | `rebellion.teams.use` | no | accepts the single pending invite, or a named one when several are pending; refuses when team is full or the invitee joined another team mid-flight |
+| `/team` | `decline [team]` | `rebellion.teams.use` | no | declines the pending invite |
+| `/team` | `uninvite <player>` | `rebellion.teams.use` + officer rank | no | withdraws the team's open invite for that online player |
+| `/team` | `kick <player>` | `rebellion.teams.use` + officer rank | no | removes a member (officers can only remove members; only the leader removes officers; the leader cannot be kicked) |
+| `/team` | `leave` | `rebellion.teams.use` | no | leaves the team; leaving as the last member auto-disbands (one audit row) |
+| `/team` | `disband` | `rebellion.teams.use` + leader rank | no | disbands: memberships, invites and relations cascade; history survives |
+| `/team` | `rename <name>` | `rebellion.teams.use` + leader rank | no | renames (unique names, cooldown) |
+| `/team` | `promote <player>` / `demote <player>` | `rebellion.teams.use` + leader rank | no | member ↔ officer |
+| `/team` | `transfer <player>` | `rebellion.teams.use` + leader rank | no | leadership moves to a member; the old leader becomes officer |
+| `/team` | `friendlyfire <on\|off>` | `rebellion.teams.use` + leader rank | no | team-wide toggle; off = same-team damage is cancelled (see friendly-fire contract) |
+| `/team` | `ally\|enemy\|neutral <team-name>` | `rebellion.teams.use` + leader rank | no | symmetric diplomacy (one row per pair); allies gain no privileges |
+| `/team` | `info [team]` / `members` / `invites` | `rebellion.teams.use` | no | read-only views |
+| `/team` | `history` | `rebellion.teams.history` | no | the team's append-only audit trail (latest 30) |
+| `/chat` | `global\|team\|proximity` | `rebellion.teams.chat` | no | channel switch, persisted across reconnects; team needs membership, proximity needs the config flag |
+
+Membership actions (`invite`, `uninvite`, `kick`, `promote`, `demote`,
+`transfer`) resolve ONLINE players only: the provided name is used to find the
+live Player object, and the live UUID is the authority. There is deliberately
+no name-based offline management.
+
+### Friendly-fire contract (ADR-0006)
+
+Cancelled when the attacker's team has friendly fire disabled: direct melee,
+projectiles (shooter), splash potions (intensity zeroed), lingering potion
+clouds, tamed pets (owner), TNT (igniter), and — with `teams.protect-allies:
+true` — allies of the attacking team. Unresolvable sources (creeper
+explosions, natural fire tick, environment) are always allowed: attribution is
+safe or absent, never guessed. Damage is also allowed while a player's cache
+is still loading (join) and when either side is teamless. All decisions are
+memory-only; no database access happens in damage events.
+
+## PlaceholderAPI placeholders (expansion `rebellion`) — teams
+
+| Placeholder | Value |
+|---|---|
+| `%rebellion_team_name%` | viewer's team display name, empty when teamless |
+| `%rebellion_team_rank%` | `leader`/`officer`/`member`, empty when teamless |
+| `%rebellion_team_online%` | number of online teammates |
+| `%rebellion_has_team%` | `true`/`false` |
+
+Player-dependent contributors implement `resolveFor(Player, String)` (added
+with a default method so existing contributors are unaffected); the expansion
+threads the requesting player through. All teams placeholders read the
+hot-path cache only.

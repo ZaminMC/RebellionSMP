@@ -60,3 +60,44 @@ CREATE TABLE IF NOT EXISTS rb_schema_migrations (
   parameters; credentials via env expansion.
 - Every module must define crash reconciliation in RECOVERY.md once it owns
   state.
+
+## Teams schema (module key `teams`, migration v1 — implemented, tested)
+
+ADR-0005 introduced module-owned late migrations: feature modules ship
+`MigrationSpec` sets and apply them at enable through
+`RebellionDatabase.applyModuleMigrations(moduleKey, specs)`, which waits for
+the Core bootstrap, registers + checksum-verifies the set and applies pending
+versions on the bounded persistence executor. Idempotent per module key;
+downgrades and changed sets are refused. ADR-0006 defines the teams schema:
+
+- `rb_teams` — one row per team: `id` (UUID), `name_norm` (lowercase
+  `[a-z0-9_]{3,24}`, UNIQUE — the uniqueness key), `display_name` (rendered
+  form), `leader` (UUID), `friendly_fire` (0/1), `created_at_utc`,
+  `renamed_at_utc` (rename cooldown anchor; initialized to creation time).
+- `rb_team_members` — PK `(team_id, player)`, `UNIQUE(player)`: the one-team-
+  per-player rule is enforced by storage, not by command code. `rank_key`
+  ∈ {leader, officer, member}; `joined_at_utc`. FK to `rb_teams` ON DELETE
+  CASCADE.
+- `rb_team_invites` — `UNIQUE(team_id, invitee)`; `expires_at_utc` gates
+  acceptance (expired rows are invisible everywhere and replaced on
+  re-invite). FK cascade removes them with the team.
+- `rb_team_relations` — symmetric diplomacy: exactly one row per pair with
+  `team_a < team_b` (writer-enforced), `relation` ∈ {ally, enemy}
+  (neutral = row removed). Allies never gain team privileges; the only
+  cross-team effect is optional friendly-fire protection (config
+  `teams.protect-allies`, default off).
+- `rb_team_history` — append-only audit of every management mutation (create,
+  invite, join, decline, uninvite, kick, leave, disband, disband_auto,
+  rename, transfer, promote, demote, friendlyfire, relation), written in the
+  same transaction as the mutation. `team_id` has no FK so history survives
+  disband.
+- `rb_chat_settings` — persisted per-player channel preference
+  (global/team/proximity) surviving reconnects.
+- `rb_team_player_state` — `last_create_utc` / `last_invite_utc` anchors for
+  the create and invite rate limits.
+
+Attribute chains (see ADR-0006 for the full contract): every membership
+mutation runs in one transaction with the rank check against live rows; the
+UNIQUE constraints are the race backstop — racing double-accepts or duplicate
+names lose with a typed outcome, never a half-state. Cache refresh happens
+only after commit and is composed into the caller's future.
