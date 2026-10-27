@@ -307,4 +307,83 @@ final class DatabaseServiceTest {
         release.countDown();
         db.shutdown();
     }
+
+    // ------------------------------------------------------------------
+    // Late module migrations (ADR-0005)
+    // ------------------------------------------------------------------
+
+    @Test
+    void applyModuleMigrationsAppliesFreshModuleAfterBootstrap(@TempDir Path tmp) {
+        DatabaseService db = new DatabaseService(sqliteConfig(tmp), tmp,
+                java.util.logging.Logger.getLogger("test"), diagnostics(tmp));
+        await(db.bootstrap());
+        assertEquals(Map.of(), db.appliedMigrationVersions());
+
+        await(db.applyModuleMigrations("teams", List.of(
+                new net.zaminmc.rebellion.api.database.MigrationSpec(1, "teams v1",
+                        List.of("CREATE TABLE rb_teams (id TEXT PRIMARY KEY)")))));
+        assertEquals(Map.of("teams", 1), db.appliedMigrationVersions());
+
+        // Idempotent: same set again applies nothing and succeeds.
+        await(db.applyModuleMigrations("teams", List.of(
+                new net.zaminmc.rebellion.api.database.MigrationSpec(1, "teams v1",
+                        List.of("CREATE TABLE rb_teams (id TEXT PRIMARY KEY)")))));
+        assertEquals(Map.of("teams", 1), db.appliedMigrationVersions());
+        db.shutdown();
+    }
+
+    @Test
+    void applyModuleMigrationsRefusesDowngradesAndChangedSets(@TempDir Path tmp) {
+        DatabaseService db = new DatabaseService(sqliteConfig(tmp), tmp,
+                java.util.logging.Logger.getLogger("test"), diagnostics(tmp));
+        await(db.bootstrap());
+
+        // v1 + v2 applied; then a v1-only set is a downgrade refusal.
+        await(db.applyModuleMigrations("teams", List.of(
+                new net.zaminmc.rebellion.api.database.MigrationSpec(1, "t1",
+                        List.of("CREATE TABLE rb_teams (id TEXT PRIMARY KEY)")),
+                new net.zaminmc.rebellion.api.database.MigrationSpec(2, "t2",
+                        List.of("CREATE TABLE rb_team_members (id TEXT PRIMARY KEY)")))));
+        ExecutionException downgrade = assertThrows(ExecutionException.class,
+                () -> db.applyModuleMigrations("teams", List.of(
+                        new net.zaminmc.rebellion.api.database.MigrationSpec(1, "t1",
+                                List.of("CREATE TABLE rb_teams (id TEXT PRIMARY KEY)"))))
+                        .get(20, TimeUnit.SECONDS));
+        assertTrue(downgrade.getCause() instanceof MigrationException);
+
+        // A different statement at the same version is a changed-set refusal
+        // (strict checksums are on in this config).
+        ExecutionException changed = assertThrows(ExecutionException.class,
+                () -> db.applyModuleMigrations("teams", List.of(
+                        new net.zaminmc.rebellion.api.database.MigrationSpec(1, "t1",
+                                List.of("CREATE TABLE rb_teams (id TEXT PRIMARY KEY)")),
+                        new net.zaminmc.rebellion.api.database.MigrationSpec(2, "t2",
+                                List.of("CREATE TABLE rb_team_members (id TEXT PRIMARY KEY, extra TEXT)")),
+                        new net.zaminmc.rebellion.api.database.MigrationSpec(3, "t3",
+                                List.of("CREATE TABLE rb_team_invites (id TEXT PRIMARY KEY)"))))
+                        .get(20, TimeUnit.SECONDS));
+        assertTrue(changed.getCause() instanceof MigrationException,
+                "changed migration set must be refused");
+        db.shutdown();
+    }
+
+    @Test
+    void applyModuleMigrationsFailsClosedWhenBootstrapFailed(@TempDir Path tmp) {
+        DatabaseService db = new DatabaseService(sqliteConfig(tmp), tmp,
+                java.util.logging.Logger.getLogger("test"), diagnostics(tmp));
+        db.registerMigrations("broken", List.of(
+                new Migration(1, "invalid", List.of("CREATE TABLE not valid sql ("))));
+        CompletableFuture<Void> ready = db.bootstrap();
+        assertThrows(ExecutionException.class, () -> ready.get(20, TimeUnit.SECONDS));
+
+        // A module applying migrations behind a failed bootstrap must fail,
+        // not hang or apply anything.
+        ExecutionException module = assertThrows(ExecutionException.class,
+                () -> db.applyModuleMigrations("teams", List.of(
+                        new net.zaminmc.rebellion.api.database.MigrationSpec(1, "t1",
+                                List.of("CREATE TABLE rb_teams (id TEXT PRIMARY KEY)"))))
+                        .get(65, TimeUnit.SECONDS));
+        assertNotNull(module.getCause());
+        db.shutdown();
+    }
 }

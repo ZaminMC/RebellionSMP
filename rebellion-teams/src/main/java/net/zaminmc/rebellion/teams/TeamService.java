@@ -102,12 +102,9 @@ public final class TeamService {
                 return mapUnique(e, TeamOutcome.NAME_TAKEN);
             }
             return TeamResult.ok();
-        }).thenApply(result -> {
-            if (result.success()) {
-                loadSnapshot(actor); // cache follows the committed authority
-            }
-            return result;
-        });
+        }).thenCompose(result -> result.success()
+                ? loadAndCache(actor).thenApply(v -> result)
+                : CompletableFuture.completedFuture(result));
     }
 
     public CompletableFuture<TeamResult> invite(UUID actor, UUID invitee) {
@@ -133,7 +130,12 @@ public final class TeamService {
                 long secondsLeft = (intervalMs - (now - lastInvite) + 999) / 1000;
                 return TeamResult.fail(TeamOutcome.INVITE_RATE_LIMITED, String.valueOf(secondsLeft));
             }
-            if (TeamStore.openInvitesFor(tx, invitee, now).size() >= config.maxPendingInvites()) {
+            // Re-inviting refreshes the existing invite for this team+invitee
+            // pair instead of consuming a new queue slot.
+            boolean refreshing = TeamStore.openInviteInTeam(
+                    tx, actorRow.teamId(), invitee, now).isPresent();
+            if (!refreshing
+                    && TeamStore.openInvitesFor(tx, invitee, now).size() >= config.maxPendingInvites()) {
                 return TeamResult.fail(TeamOutcome.INVITE_QUEUE_FULL);
             }
             try {
@@ -200,12 +202,9 @@ public final class TeamService {
                 return mapUnique(e, TeamOutcome.ALREADY_IN_TEAM);
             }
             return TeamResult.ok(team.displayName());
-        }).thenApply(result -> {
-            if (result.success()) {
-                loadSnapshot(actor); // refresh cache from authority
-            }
-            return result;
-        });
+        }).thenCompose(result -> result.success()
+                ? loadAndCache(actor).thenApply(v -> result)
+                : CompletableFuture.completedFuture(result));
     }
 
     public CompletableFuture<TeamResult> decline(UUID actor, String teamNameOrNull) {
@@ -387,15 +386,17 @@ public final class TeamService {
                 return mapUnique(e, TeamOutcome.NAME_TAKEN);
             }
             return TeamResult.ok();
-        }).thenApply(result -> {
-            if (result.success()) {
-                loadSnapshot(actor);
-                // Name changes are team-wide in the hot-path cache: refresh
-                // every online member's snapshot from the fresh authority.
-                cache.lookup(actor).flatMap(o -> o).ifPresent(s ->
-                        cache.forEachOnlineMember(s.teamId(), this::loadSnapshot));
+        }).thenCompose(result -> {
+            if (!result.success()) {
+                return CompletableFuture.completedFuture(result);
             }
-            return result;
+            // Name changes are team-wide in the hot-path cache: refresh
+            // every online member's snapshot from the fresh authority.
+            return loadAndCache(actor).thenApply(v -> {
+                cache.lookup(actor).flatMap(o -> o).ifPresent(s ->
+                        cache.forEachOnlineMember(s.teamId(), p -> loadAndCache(p)));
+                return result;
+            });
         });
     }
 
@@ -546,12 +547,9 @@ public final class TeamService {
             TeamStore.insertHistory(tx, UUID.randomUUID(), actorRow.teamId(), actor,
                     "relation", other.nameNorm() + "=" + relation, now);
             return TeamResult.ok(other.displayName());
-        }).thenApply(result -> {
-            if (result.success()) {
-                refreshAllies(actor);
-            }
-            return result;
-        });
+        }).thenCompose(result -> result.success()
+                ? refreshAllies(actor).thenApply(v -> result)
+                : CompletableFuture.completedFuture(result));
     }
 
     // ------------------------------------------------------------------
@@ -672,8 +670,8 @@ public final class TeamService {
     }
 
     /** Refreshes both teams' ally sets in every online member snapshot. */
-    private void refreshAllies(UUID actor) {
-        db.transaction(tx -> {
+    private CompletableFuture<Void> refreshAllies(UUID actor) {
+        return db.transaction(tx -> {
             TeamStore.MembershipRow row = TeamStore.membershipOf(tx, actor).orElse(null);
             if (row == null) {
                 return java.util.Map.<UUID, Set<UUID>>of();
