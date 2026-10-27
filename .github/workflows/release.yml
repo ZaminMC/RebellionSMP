@@ -1,0 +1,362 @@
+name: release
+
+# The release pipeline — every push to develop cuts the next numbered dev
+# build automatically (the ZaminTorch pipeline, adapted to this repo):
+#
+#   1. compute N over the tag ledger (vX.Y.Z-dev.N — one numbering across
+#      base version bumps, so 0.1.0-dev.7 -> 0.2.0-dev.8 continues);
+#   2. stamp the version into gradle.properties (version is centralized
+#      there; every module's plugin.yml expands it via processResources);
+#   3. sync the bump back to develop as an Abasing-authored "[skip ci]"
+#      commit (the loop-breaker: the pipeline's own push must not retrigger)
+#      — BEFORE building, so the JARs are always built from the exact tree
+#      that gets tagged, even if a rebase pulls in newer commits mid-run;
+#   4. run the full test suite (one retry for CI-load flakiness — a second
+#      failure still fails the job; tests are never skipped or masked);
+#   5. stage exactly the installable JARs (modules that ship plugin.yml)
+#      into build/release/ and verify each jar carries its descriptor;
+#   6. tag vX.Y.Z-dev.N (lightweight);
+#   7. publish the staged JARs as a PRERELEASE through gh — prereleases are
+#      never the "latest" release on GitHub, which is exactly the policy:
+#      dev builds are visible but stable "latest" stays reserved for the
+#      explicit reviewed develop -> main release process (master prompt §16).
+#
+# Failure safety: a build/test failure pushes no tag and cuts no release —
+# the next run (or a re-run) reuses the same number and the already-pushed
+# bump commit. A run that dies between tag and release is resumed by the
+# orphan-tag repair path. Everything — bump commit, tag push, release — is
+# authored as Abasing through the ABASING_TOKEN secret, never
+# github-actions[bot].
+#
+# Division of labor with ci.yml: this workflow owns push-to-develop (build +
+# test + prerelease); ci.yml owns pull requests (develop/main) and the
+# read-only push validation of main. Both run the same wrapper build, so a
+# develop push is never built twice.
+#
+# Escape hatches:
+#   - a head commit carrying [skip ci] / [ci skip] / [no ci] postpones its
+#     push's release to the next push;
+#   - workflow_dispatch (optional title input) cuts an off-cycle release;
+#   - re-running a run that already published is a no-op.
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+    inputs:
+      title:
+        description: "Optional release title (otherwise the Release-Title: commit trailer, or a default)"
+        required: false
+        type: string
+
+# Releases queue behind each other; a cancelled mid-flight release could
+# leak half-pushed state, so never cancel.
+concurrency:
+  group: release-develop
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      !(contains(github.event.head_commit.message, '[skip ci]') ||
+        contains(github.event.head_commit.message, '[ci skip]') ||
+        contains(github.event.head_commit.message, '[no ci]') ||
+        contains(github.event.head_commit.message, '[skip actions]') ||
+        contains(github.event.head_commit.message, '[actions skip]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout develop (as Abasing)
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          token: ${{ secrets.ABASING_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Compute the next build number (tag ledger)
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.ABASING_TOKEN }}
+        run: |
+          set -euo pipefail
+          git fetch --tags --force origin
+
+          # The base version comes from gradle.properties: '0.1.0-SNAPSHOT'
+          # -> '0.1.0'. After a release bump the file holds '0.1.0-dev.N'
+          # instead — both strip to the same base. The ledger keeps ONE
+          # numbering across base bumps (0.1.0-dev.7 -> 0.2.0-dev.8).
+          BASE=$(sed -n 's/^version=//p' gradle.properties \
+            | sed 's/-SNAPSHOT$//; s/-dev\.[0-9]\+$//')
+          if ! printf '%s' "$BASE" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::unexpected version= in gradle.properties (want X.Y.Z-SNAPSHOT or X.Y.Z-dev.N, got '$BASE')"
+            exit 1
+          fi
+
+          numbered_tags() {
+            git tag -l | while IFS= read -r t; do
+              n=$(printf '%s' "$t" | sed -nE \
+                's/^v[0-9]+\.[0-9]+\.[0-9]+-dev\.([0-9]+)$/\1/p')
+              if [ -n "$n" ]; then printf '%s %s\n' "$n" "$t"; fi
+            done | sort -n
+          }
+
+          LAST_LINE=$(numbered_tags | tail -1)
+          if [ -n "$LAST_LINE" ]; then
+            LAST_NUM=${LAST_LINE%% *}
+            PREV_TAG=${LAST_LINE#* }
+          else
+            LAST_NUM=0
+            PREV_TAG=""
+          fi
+
+          HEAD_TAG=$(git tag --points-at HEAD \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-dev\.[0-9]+$' | sed -n '1p' || true)
+
+          SKIP=false
+          REPAIR=false
+          N=$(( LAST_NUM + 1 ))
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ -n "$HEAD_TAG" ]; then
+            if gh release view "$HEAD_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "HEAD is already released as $HEAD_TAG — nothing to do."
+              SKIP=true
+            else
+              # A previous run died between the tag push and the release:
+              # resume that number instead of burning it.
+              echo "Found orphan tag $HEAD_TAG at HEAD (release missing) — resuming it."
+              N=$(printf '%s' "$HEAD_TAG" | sed -nE 's/^v[0-9]+\.[0-9]+\.[0-9]+-dev\.([0-9]+)$/\1/p')
+              REPAIR=true
+            fi
+          fi
+
+          V="$BASE-dev.$N"
+          {
+            echo "number=$N"
+            echo "base=$BASE"
+            echo "version=$V"
+            echo "tag=v$V"
+            echo "prev_tag=$PREV_TAG"
+            echo "repair=$REPAIR"
+            echo "skip=$SKIP"
+          } >> "$GITHUB_OUTPUT"
+          echo "Next release: v$V (ledger high: $LAST_NUM, previous tag: ${PREV_TAG:-none}, repair: $REPAIR, skip: $SKIP)"
+
+      - name: Stamp the version (gradle.properties)
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          V="${{ steps.version.outputs.version }}"
+          sed -i "s/^version=.*/version=$V/" gradle.properties
+          echo "--- stamped:"
+          grep -n '^version=' gradle.properties
+
+      - name: Sync the version bump back to develop (as Abasing)
+        if: steps.version.outputs.skip != 'true' && steps.version.outputs.repair != 'true'
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          git config user.name "Abasing"
+          git config user.email "zaminpro2.0@gmail.com"
+          if git diff --quiet; then
+            echo "source already carries $TAG — no bump commit needed"
+            exit 0
+          fi
+          git add gradle.properties
+          git commit -m "release: $TAG — version bump [skip ci]"
+          for attempt in 1 2; do
+            if git pull --rebase origin develop && git push origin develop; then
+              echo "bump pushed as $(git rev-parse --short HEAD)"
+              exit 0
+            fi
+            echo "::warning::push raced a concurrent commit (attempt $attempt) — rebasing and retrying"
+            git rebase --abort 2>/dev/null || true
+            sleep 5
+          done
+          echo "::error::could not sync the bump (develop moved underneath twice) — re-run the workflow"
+          exit 1
+
+      - name: Build + full test suite (one retry for CI-load flakiness)
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          if ! ./gradlew build --no-daemon; then
+            echo "::warning::first build failed — retrying once (fresh-runner load flakiness); a second failure fails the job"
+            ./gradlew build --no-daemon
+          fi
+
+      - name: Stage the installable JARs (build/release)
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          V="${{ steps.version.outputs.version }}"
+          mkdir -p build/release
+          COUNT=0
+          SKIPPED=""
+          # Exactly the modules that ship a plugin descriptor are installable
+          # (master prompt §17: "Only include modules once they contain tested
+          # functionality"). rebellion-dragons ships none yet — it is a
+          # persistence layer, not a plugin — and joins the release
+          # automatically the moment it gains plugin.yml.
+          for d in rebellion-*/; do
+            if [ ! -f "${d}src/main/resources/plugin.yml" ]; then
+              SKIPPED="$SKIPPED ${d%/}"
+              continue
+            fi
+            # The shadow jar (Core) uses no classifier; the thin jar ends in
+            # -thin.jar and cannot match *-$V.jar. Exactly one per module.
+            set -- "${d}build/libs/Rebellion"*"-$V.jar"
+            if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
+              echo "::error::expected exactly 1 installable jar in ${d}build/libs (version $V), found $#: $*"
+              exit 1
+            fi
+            unzip -p "$1" plugin.yml >/dev/null \
+              || { echo "::error::$1 does not contain plugin.yml"; exit 1; }
+            cp "$1" build/release/
+            COUNT=$((COUNT+1))
+          done
+          if [ "$COUNT" -lt 2 ]; then
+            echo "::error::expected at least RebellionAPI + RebellionCore, staged only $COUNT"
+            exit 1
+          fi
+          if [ -n "$SKIPPED" ]; then
+            # strip the leading separator space before exporting
+            echo "SKIPPED_MODULES=${SKIPPED# }" >> "$GITHUB_ENV"
+          fi
+          if [ -n "$SKIPPED" ]; then S="${SKIPPED# }"; else S="none"; fi
+          echo "--- staged $COUNT installable jars (skipped: $S):"
+          ls -la build/release/
+
+      - name: Tag the release (lightweight)
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            git tag "$TAG"
+          fi
+          if ! git push origin "refs/tags/$TAG"; then
+            # Rejected: the tag exists remotely. Accept only if it is the
+            # exact same tree (a racing/repaired run), never silently move it.
+            git fetch --tags --force origin
+            if [ "$(git rev-parse "refs/tags/$TAG")" != "$(git rev-parse HEAD)" ]; then
+              echo "::error::remote tag $TAG points at a different commit — investigate manually"
+              exit 1
+            fi
+            echo "remote tag $TAG already points at HEAD — accepting"
+          fi
+          echo "tagged $(git rev-parse --short HEAD) as $TAG"
+
+      - name: Generate the release notes
+        if: steps.version.outputs.skip != 'true'
+        env:
+          INPUT_TITLE: ${{ github.event.inputs.title }}
+        run: |
+          set -euo pipefail
+          N="${{ steps.version.outputs.number }}"
+          BASE="${{ steps.version.outputs.base }}"
+          V="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          PREV="${{ steps.version.outputs.prev_tag }}"
+
+          # The version-bump commits ("release: v…") are pipeline
+          # infrastructure, not changes — keep them out of the notes.
+          if git log -1 --format=%s HEAD | grep -q '^release: v'; then
+            RANGE_END="HEAD^"
+          else
+            RANGE_END="HEAD"
+          fi
+          if [ -n "$PREV" ]; then RANGE="$PREV..$RANGE_END"; else RANGE="$RANGE_END"; fi
+
+          COUNT=$(git rev-list --count "$RANGE")
+          SHORTSTAT=$(git diff --shortstat "$RANGE" || true)
+          SHORT_SHA=$(git rev-parse --short "$RANGE_END")
+
+          # Title precedence: dispatch input > Release-Title: trailer > default.
+          TITLE="$INPUT_TITLE"
+          if [ -z "$TITLE" ]; then
+            # grep without -m1 / head: an early-exiting consumer would SIGPIPE
+            # git log under pipefail and silently lose the title.
+            TITLE=$(git log --format=%B "$RANGE" | grep '^Release-Title:' \
+                    | sed -n '1s/^Release-Title:[[:space:]]*//p' || true)
+          fi
+          if [ -z "$TITLE" ]; then TITLE="RebellionSMP $BASE dev build $N"; fi
+          echo "TITLE=$TITLE" >> "$GITHUB_ENV"
+          echo "title: $TITLE"
+
+          {
+            echo "Dev build \`$TAG\` — auto-cut from \`develop\` @ \`$SHORT_SHA\` ($COUNT commit(s) since \`${PREV:-the beginning}\`$([ -n "$SHORTSTAT" ] && echo ", $SHORTSTAT" || echo))."
+            echo
+            if [ -n "$PREV" ]; then
+              echo "Full diff: [$PREV...$TAG](https://github.com/$GITHUB_REPOSITORY/compare/$PREV...$TAG)"
+              echo
+            fi
+            echo "### Changes"
+            echo
+            { git log --reverse --format='- %s' "$RANGE" \
+              | grep -v '^- release: v' \
+              | awk '{ if (length($0) > 200) print substr($0, 1, 200) "…"; else print }' || true; }
+            echo
+            echo "<details><summary>Full commit messages</summary>"
+            echo
+            { git log --reverse --format='%h %s%n%n%b%n---' "$RANGE" \
+              | grep -v '^[0-9a-f]\{7\} release: v' || true; }
+            echo
+            echo "</details>"
+            echo
+            echo "### Artifacts"
+            echo
+            echo "Install order: drop \`RebellionAPI\` into \`plugins/\` first (STARTUP), then \`RebellionCore\`, then the feature modules (POSTWORLD). See \`docs/OPERATIONS.md\`."
+            echo
+            # API first, Core second, feature modules after — README order.
+            for j in $(ls build/release/ | awk '/^RebellionAPI-/ {print "1"$0; next} /^RebellionCore-/ {print "2"$0; next} {print "3"$0}' | sort | cut -c2-); do
+              echo "- \`$j\`"
+            done
+            echo
+            if [ -n "${SKIPPED_MODULES:-}" ]; then
+              echo "Modules in this build that are **not yet installable** (no plugin descriptor — built and tested, shipped as source/library only): \`${SKIPPED_MODULES// /, }\`."
+              echo
+            fi
+            echo "Requires Paper 26.3 and Java 25. SQLite works with zero setup; MySQL/MariaDB is configured in \`database.yml\`."
+          } > notes.md
+          echo "--- notes.md (first 40 lines):"
+          head -40 notes.md
+
+      - name: Publish the prerelease (as Abasing)
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ABASING_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          # --prerelease is the policy, not a default: dev builds are never
+          # published as the repo's "latest" release. Verified below.
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --prerelease \
+            --verify-tag \
+            --title "$TITLE" \
+            --notes-file notes.md \
+            build/release/*.jar
+          echo "--- published:"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json name,tagName,isPrerelease,author,url \
+            -q '"name=" + .name + " tag=" + .tagName + " prerelease=" + (.isPrerelease|tostring) + " author=" + .author.login + " url=" + .url'
+          IS_PRE=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease -q .isPrerelease)
+          if [ "$IS_PRE" != "true" ]; then
+            echo "::error::release $TAG was not published as a prerelease — investigate immediately"
+            exit 1
+          fi

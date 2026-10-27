@@ -6,6 +6,10 @@
   Java 25 toolchain); no Bukkit server required for the current suites.
 - CI: GitHub Actions `ubuntu-latest` + Temurin 25 (see
   `.github/workflows/ci.yml`), `./gradlew build` with dependency caching.
+  Pushes to `develop` are owned by `.github/workflows/release.yml`, which
+  runs the same build/tests and publishes the numbered dev prerelease
+  (ADR-0010); ci.yml keeps pull requests and the read-only `main` push
+  validation.
 - A real Paper 26.3 server is not available in this environment; server-level
   verification is a documented manual gate before any "verified-on-Paper-26.3"
   status.
@@ -82,6 +86,12 @@ was run 3× consecutively with `--rerun-tasks` to confirm stability.
       verified by this manual gate. MockBukkit does not support 26.3 (its
       latest targets 1.21). Same applies to `org.bukkit.attribute.Attribute`
       (probe-caught, ADR-0008).
+- [ ] Release pipeline on GitHub (first automated run, ADR-0010): a push to
+      `develop` cuts `vX.Y.Z-dev.N` — the release exists with exactly the
+      installable JARs (API, Core, Items, Teams, Wards), `prerelease: true`,
+      authored by Abasing, the `releases/latest` endpoint does not resolve
+      to it, the version-bump commit on `develop` carries `[skip ci]`, and
+      the run triggered by that bump commit is skipped.
 - [ ] Teams on Paper 26.3: invite→accept happy path, kick/leave/disband,
       friendly-fire cancellation matrix (melee/projectile/TNT/pet/cloud),
       team + proximity chat channels, `/team history` rendering.

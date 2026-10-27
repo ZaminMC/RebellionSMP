@@ -9,6 +9,7 @@ its owning module has tests passing in `./gradlew test`.
 | Feature | Owning module | Status | Notes |
 |---|---|---|---|
 | Gradle multi-project build, wrapper, version catalog | root | tested | Java 25 toolchain, pinned deps, FAIL_ON_PROJECT_REPOS |
+| Release pipeline: numbered dev prereleases from develop (ADR-0010) | .github/workflows | tested | every develop push → `vX.Y.Z-dev.N` prerelease (never `latest`), JARs discovered by plugin.yml presence, writes authored as Abasing via ABASING_TOKEN; ci.yml keeps PRs + main |
 | Shared API contracts (database, module registry, results) | rebellion-api | tested | one runtime class identity via plugin `depend` |
 | Core lifecycle + bootstrap + fail-closed disable | rebellion-core | tested | BootstrapException path, unit-covered |
 | Config loader framework (atomic reload, env expansion, issue aggregation) | rebellion-core | tested | ConfigLoaderTest, CoreConfigLoaderTest, DatabaseConfigLoaderTest |

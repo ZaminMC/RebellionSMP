@@ -1,5 +1,17 @@
 # Operations guide
 
+## Obtaining builds
+
+- **Dev builds**: every push to `develop` is built, tested, and published
+  automatically as a numbered **pre-release** (`vX.Y.Z-dev.N`) on
+  [GitHub Releases](https://github.com/ZaminMC/RebellionSMP/releases). The
+  release notes list the included commits and the exact JARs; modules that
+  ship no plugin descriptor yet (currently `RebellionDragons`) are noted
+  there as built-but-not-installable and are **not** attached.
+- Prereleases are never the `latest` release — `latest` is reserved for
+  reviewed stable releases from `main`. Pipeline design and failure
+  semantics: `docs/decisions/ADR-0010-release-pipeline.md`.
+
 ## Install
 
 1. Paper 26.3 server, Java 25 runtime (per Paper's toolchain).

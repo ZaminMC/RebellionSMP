@@ -18,25 +18,34 @@ Read this file before editing anything in this repository.
 1. **Branch policy.** All work lands on `develop`. Never commit features on
    `main`, never force-push, never rewrite published history. Focused feature
    branches off `develop` are welcome for large slices.
-2. **Commit identity.** `git config user.name "Abasing"` locally; keep the
+2. **Every push to `develop` auto-releases.** The `release` workflow
+   (`.github/workflows/release.yml`, ADR-0010) builds, tests, and publishes
+   the next numbered dev build as a GitHub **prerelease** (`vX.Y.Z-dev.N`,
+   never `latest`). It also pushes a `release: … [skip ci]` version-bump
+   commit to `develop` — pull before continuing your session. To land work
+   without cutting a release, put `[skip ci]` in the head commit message;
+   the next ordinary push releases it. Don't hand-edit `version=` in
+   `gradle.properties` unless bumping the base version (`0.1.0-SNAPSHOT` →
+   `0.2.0-SNAPSHOT`): the pipeline stamps the dev number itself.
+3. **Commit identity.** `git config user.name "Abasing"` locally; keep the
    configured account email. Confirm with `git log -1 --format=fuller` before
    pushing. Never add model/agent co-authors.
-3. **No land claims.** Any mechanic that denies block placement/breaking or
+4. **No land claims.** Any mechanic that denies block placement/breaking or
    container access by non-team members must not exist outside the two
    documented exceptions (prison structure, artifact origin recovery).
-4. **No main-thread SQL**, no unbounded queues, no per-player threads, no
+5. **No main-thread SQL**, no unbounded queues, no per-player threads, no
    world scans per tick. Database work goes through
    `DatabaseService`'s bounded executor; world/player mutation runs on the
    server scheduler.
-5. **Fail closed for valuables.** If persistence is unavailable, unique assets
+6. **Fail closed for valuables.** If persistence is unavailable, unique assets
    (dragon lineages, artifacts, currency, unique item IDs) are never minted,
    moved, or consumed.
-6. **One runtime identity for the API.** Feature modules `depend: [RebellionAPI]`
+7. **One runtime identity for the API.** Feature modules `depend: [RebellionAPI]`
    and must never shade API classes.
-7. **Every module owns its config.** `config.yml` + `messages.yml` per feature
+8. **Every module owns its config.** `config.yml` + `messages.yml` per feature
    module; `database.yml` only in Core. DeluxeMenus-shaped `gui_menus` registry
    for menus.
-8. **Closed-tag MiniMessage.** All message templates must have explicitly closed
+9. **Closed-tag MiniMessage.** All message templates must have explicitly closed
    tags; the loader validates with strict-mode MiniMessage and rejects unclosed
    tags. Runtime placeholders (`<version>`, …) are exempt.
 

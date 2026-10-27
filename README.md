@@ -15,10 +15,23 @@ Early development on the `develop` branch. Currently implemented:
 | RebellionAPI | `RebellionAPI-<version>.jar` | shared contracts (database, module registry, results) — tested |
 | RebellionCore | `RebellionCore-<version>.jar` | lifecycle, config/message loaders, SQLite/MySQL persistence, migrations, diagnostics, `/rebellion` admin command, PlaceholderAPI expansion — tested |
 | RebellionItems | `RebellionItems-<version>.jar` | rarity registry + resolver, PDC item identity, lore annotation, talisman tiers, DeluxeMenus-shaped menu engine with two bundled menus — tested |
+| RebellionTeams | `RebellionTeams-<version>.jar` | atomic teams/invites/ranks/diplomacy, team + proximity chat, friendly-fire attribution — tested |
+| RebellionWards | `RebellionWards-<version>.jar` | no-claim watch wards, calibrated distance, outsider alerts, countermeasures — tested |
+| RebellionDragons | `RebellionDragons-<version>.jar` | dragon lineage persistence layer (20-slot registry) — tested; **not installable yet** (no plugin descriptor until the controller phase) |
 
-Feature modules (teams, wards, dragons, artifacts, rituals, alchemy, prison,
-cosmetics) are planned and not yet built — see `docs/MASTER_LEDGER.md` for the
-phase roadmap and current status.
+Further modules (artifacts, rituals, alchemy, prison, cosmetics) are planned —
+see `docs/MASTER_LEDGER.md` for the phase roadmap and current status.
+
+## Dev builds
+
+Every push to the `develop` branch is built, tested, and published
+automatically as a numbered **pre-release** on
+[GitHub Releases](https://github.com/ZaminMC/RebellionSMP/releases)
+(`vX.Y.Z-dev.N`). Dev builds are prereleases by policy — they are never
+marked `latest`; the `latest` slot stays reserved for reviewed stable
+releases from `main`. Each release carries the installable module JARs and
+notes listing the included commits. See `docs/decisions/ADR-0010-release-pipeline.md`
+for the pipeline design.
 
 ## Requirements
 
@@ -39,6 +52,9 @@ phase roadmap and current status.
 2. `RebellionCore-<version>.jar` → `plugins/` (STARTUP, depends on RebellionAPI)
 3. `RebellionItems-<version>.jar` (POSTWORLD, depends on API + Core)
 4. Further feature module JARs as they become available (POSTWORLD)
+
+Pre-built JARs come from the dev releases above; building from source is only
+needed for development.
 
 RebellionCore creates `plugins/RebellionCore/` with `config.yml`,
 `database.yml`, and `messages.yml` on first boot. SQLite works with zero setup;
