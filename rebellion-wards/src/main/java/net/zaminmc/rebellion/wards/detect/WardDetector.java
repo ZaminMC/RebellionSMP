@@ -121,7 +121,8 @@ public final class WardDetector {
             return;
         }
         long cooldownMs = config.realertCooldownSeconds() * 1000L;
-        if (nowMs - track.lastAlertAtMs() < cooldownMs) {
+        long lastAlert = track.lastAlertAtMs();
+        if (lastAlert != Track.NEVER_ALERTED && nowMs - lastAlert < cooldownMs) {
             // Re-enter inside the cooldown window: stay silent, stay inside.
             state.update(key, track.suppressDwell());
             return;

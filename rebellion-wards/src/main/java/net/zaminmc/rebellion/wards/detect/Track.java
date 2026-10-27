@@ -9,14 +9,18 @@ package net.zaminmc.rebellion.wards.detect;
  * @param enteredAtMs  sweep timestamp of the last ENTER transition
  * @param dwellPending true when the ENTER still owes a dwell-delayed commit
  * @param lastAlertAtMs timestamp of the last ENTER alert that actually fired
- *                      (survives LEAVE — that is the re-alert cooldown)
+ *                      (survives LEAVE — that is the re-alert cooldown);
+ *                      {@link #NEVER_ALERTED} until the first alert
  * @param alerted      whether the enter alert was delivered (suppresses the
  *                     leave notice when it never was)
  */
 record Track(boolean inside, long enteredAtMs, boolean dwellPending,
         long lastAlertAtMs, boolean alerted) {
 
-    static final Track OUTSIDE = new Track(false, 0L, false, 0L, false);
+    /** Sentinel for "no alert yet" — 0 is a legitimate wall-clock value. */
+    static final long NEVER_ALERTED = Long.MIN_VALUE;
+
+    static final Track OUTSIDE = new Track(false, 0L, false, NEVER_ALERTED, false);
 
     Track enter(long nowMs, boolean dwellPending) {
         return new Track(true, nowMs, dwellPending, lastAlertAtMs, false);

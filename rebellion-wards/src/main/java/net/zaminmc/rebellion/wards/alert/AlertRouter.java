@@ -74,7 +74,7 @@ public final class AlertRouter {
     private void renderAndSend(java.util.List<AlertDecision> alerts) {
         Function<UUID, String> names = id -> {
             Player player = plugin.getServer().getPlayer(id);
-            return player == null ? "someone" : player.getName();
+            return player == null ? null : player.getName();
         };
         for (AlertDecision alert : alerts) {
             Component message = MINI.deserialize(
@@ -117,7 +117,8 @@ public final class AlertRouter {
         return result;
     }
 
-    /** Fills the alert template; the name resolver is delivery-time and server-owned. */
+    /** Fills the alert template; the name resolver is delivery-time and
+     *  server-owned (null renders as "someone" for offline intruders). */
     static String renderText(@NotNull AlertDecision alert, @NotNull DistanceService distances,
             @NotNull Function<UUID, String> nameResolver) {
         String template = alert.kind() == AlertDecision.Kind.ENTER
@@ -125,8 +126,9 @@ public final class AlertRouter {
         String distance = alert.kind() == AlertDecision.Kind.ENTER
                 ? distances.format(Math.max(0.0, alert.distanceBlocks()), alert.ward().world())
                 : "";
+        String rawName = nameResolver.apply(alert.playerId());
         return template
-                .replace("{player}", escape(nameResolver.apply(alert.playerId())))
+                .replace("{player}", escape(rawName == null ? "someone" : rawName))
                 .replace("{ward}", escape(alert.ward().name()))
                 .replace("{decoy}", alert.decoy() ? " <gray>(decoy)</gray>" : "")
                 .replace("{distance}", distance);

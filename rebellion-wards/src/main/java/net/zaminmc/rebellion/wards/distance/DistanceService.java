@@ -68,7 +68,7 @@ public final class DistanceService {
      * Formats a same-world block distance per the world's calibration:
      * {@code "2.4 km"} when calibrated (one decimal below 10 km, integer
      * above), otherwise {@code "2400 blocks"} / {@code "2400 meters"} per
-     * {@code distance.uncalibrated-unit}. Integer-block display truncates
+     * {@code distance.uncalibrated-unit}. Integer-block display rounds
      * sub-block slivers.
      *
      * @param blocks horizontal distance in world units (never negative)
@@ -81,21 +81,9 @@ public final class DistanceService {
             return whole + " " + config.uncalibratedUnit();
         }
         double km = Math.max(0.0, blocks) / scale;
-        if (km >= 100.0) {
+        if (km >= 10.0) {
             return String.format(Locale.ROOT, "%.0f km", km);
         }
         return String.format(Locale.ROOT, "%.1f km", km);
-    }
-
-    /**
-     * Convenience: distance between a position and a ward anchor, then
-     * format. Empty world pairing surfaces as an IllegalArgumentException —
-     * callers on the hot path pre-filter by world.
-     */
-    public @NotNull String formatDistance(double px, double pz, @NotNull String wardWorld,
-            double wx, double wz) {
-        return format(horizontalDistance(wardWorld, wx, wz, wardWorld, px, pz)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "cross-world distance has no format")), wardWorld);
     }
 }
