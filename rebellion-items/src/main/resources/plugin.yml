@@ -11,9 +11,9 @@ website: https://github.com/ZaminMC/RebellionSMP
 
 commands:
   rebellionitems:
-    description: RebellionItems administration (inspect, annotate, give, reload, status).
+    description: RebellionItems administration (inspect, annotate, give, audit, reload, status).
     permission: rebellion.items.admin
-    usage: /rebellionitems <inspect|annotate|give|reload|status>
+    usage: /rebellionitems <inspect|annotate|give|audit|reload|status>
   rebellionmenu:
     description: Open a RebellionSMP menu by id.
     permission: rebellion.items.menu
@@ -27,6 +27,7 @@ permissions:
       rebellion.items.admin.inspect: true
       rebellion.items.admin.annotate: true
       rebellion.items.admin.give: true
+      rebellion.items.admin.audit: true
       rebellion.items.admin.reload: true
       rebellion.items.admin.status: true
   rebellion.items.admin.inspect:
@@ -37,6 +38,9 @@ permissions:
     default: op
   rebellion.items.admin.give:
     description: Allows /rebellionitems give <defined-item-id> [player] - restricted mint of defined custom items only.
+    default: op
+  rebellion.items.admin.audit:
+    description: Allows /rebellionitems audit <player> - live read-only view of RebellionSMP-tagged stacks in a player's containers.
     default: op
   rebellion.items.admin.reload:
     description: Allows /rebellionitems reload.

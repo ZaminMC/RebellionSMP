@@ -99,6 +99,24 @@ public final class MenuRegistry {
             }
         }
 
+        // Cross-menu constraint: open_command must be unique across the whole
+        // registry, or the server could not tell which menu a command opens.
+        // Refusing the whole candidate keeps reloads atomic and deterministic
+        // (file order must not decide ownership).
+        Map<String, List<String>> commandClaimants = new LinkedHashMap<>();
+        for (MenuSpec spec : candidate.values()) {
+            if (spec.openCommand() != null && !spec.openCommand().isBlank()) {
+                commandClaimants.computeIfAbsent(spec.openCommand(), k -> new ArrayList<>())
+                        .add(spec.id());
+            }
+        }
+        for (Map.Entry<String, List<String>> claim : commandClaimants.entrySet()) {
+            if (claim.getValue().size() > 1) {
+                issues.add("open_command '/" + claim.getKey() + "' declared by menus "
+                        + claim.getValue() + "; open_command must be unique per menu");
+            }
+        }
+
         return new LoadResult(Map.copyOf(candidate), List.copyOf(issues));
     }
 
