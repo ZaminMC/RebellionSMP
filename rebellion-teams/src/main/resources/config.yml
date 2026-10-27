@@ -1,0 +1,34 @@
+# RebellionTeams configuration.
+# Every value below is validated at load; an invalid file keeps the previous
+# configuration active and reports precise issues (see docs/CONFIGURATION.md).
+
+teams:
+  # Hard membership cap per team. Accept checks the live member count inside
+  # the acceptance transaction, so joins while full can never slip through.
+  max-members: 8
+  # Maximum unexpired invites one player may hold across all teams.
+  max-pending-invites: 3
+  # Unaccepted invites expire and stop counting after this many seconds.
+  invite-expiry-seconds: 86400
+  # A player must wait this long between /team create attempts.
+  create-cooldown-seconds: 300
+  # After a rename, the team cannot be renamed again for this long.
+  rename-cooldown-seconds: 3600
+  # A player can send at most one invite per this many seconds (spam control).
+  invite-send-interval-seconds: 30
+  # When true, allies (relation 'ally') are also protected by friendly-fire
+  # cancellation when the attacking team disabled friendly fire. Allies never
+  # gain team privileges regardless of this flag.
+  protect-allies: false
+
+chat:
+  # Proximity channel radius in blocks (horizontal distance, same world).
+  proximity-radius: 100.0
+  # Master switch for the proximity channel; when false, players cannot
+  # switch to it and the channel falls back to global.
+  proximity-enabled: true
+  # Channel a player starts with when they have no stored preference.
+  default-channel: global
+  # Rate limit for team/proximity channel messages, per player, in messages
+  # per this many seconds.
+  message-interval-seconds: 1

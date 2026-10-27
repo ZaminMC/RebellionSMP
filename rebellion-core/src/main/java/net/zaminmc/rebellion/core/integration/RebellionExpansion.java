@@ -50,6 +50,8 @@ public final class RebellionExpansion extends PlaceholderExpansion {
 
     @Override
     public @Nullable String onPlaceholderRequest(Player player, @NotNull String params) {
-        return resolver.resolve(params); // unknown → null → PAPI leaves text untouched
+        // Player-dependent contributors receive the viewer; unknown → null →
+        // PAPI leaves the text untouched.
+        return resolver.resolveFor(player, params);
     }
 }

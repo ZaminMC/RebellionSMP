@@ -63,4 +63,20 @@ public interface RebellionDatabase {
      * any exception. Use for every state change that spans rows.
      */
     <T> CompletableFuture<T> transaction(TransactionWork<T> work);
+
+    /**
+     * Late, namespaced module migrations (ADR-0005). Feature modules call
+     * this exactly once at their enable, before their first database access.
+     *
+     * <p>Waits for the Core database bootstrap (fail-closed if it failed),
+     * then — on the bounded persistence executor — registers the module's
+     * set, verifies checksums of already-applied versions (when strict
+     * checksums are enabled), refuses downgrades and applies pending
+     * versions in order. Idempotent per module key. On saturation the future
+     * fails with {@code PERSISTENCE_OVERLOADED} and nothing is applied.</p>
+     *
+     * @param moduleKey stable schema key, e.g. {@code "teams"}
+     * @param migrations gap-free set starting at version 1
+     */
+    CompletableFuture<Void> applyModuleMigrations(String moduleKey, List<MigrationSpec> migrations);
 }

@@ -123,6 +123,79 @@ public final class MigrationRunner {
         }
     }
 
+    /**
+     * Late module migration path (ADR-0005): registers the module's set if
+     * new (idempotent when identical), then verifies checksums and applies
+     * pending versions for exactly this module. Serialization: this method
+     * and {@link #applyAll} share the runner monitor, so a late registration
+     * can never interleave with a boot-time application.
+     *
+     * @throws MigrationException fail-closed: the module refuses to enable
+     *         and the database is left untouched for this module
+     */
+    public synchronized void applyModule(Connection connection, String moduleKey,
+            List<Migration> migrations, boolean strictChecksums)
+            throws SQLException, MigrationException {
+        List<String> issues = new ArrayList<>();
+        ensureRegistryTable(connection);
+
+        TreeMap<Integer, Migration> set = registered.get(moduleKey);
+        if (set == null) {
+            register(moduleKey, migrations);
+            set = registered.get(moduleKey);
+        } else {
+            // Idempotent re-registration must be the exact same set; a
+            // different set against the same key is module misuse.
+            if (set.size() != migrations.size()) {
+                issues.add("module '" + moduleKey + "' migration set changed between calls ("
+                        + set.size() + " previously, " + migrations.size() + " now)");
+            } else {
+                for (Migration m : migrations) {
+                    Migration existing = set.get(m.version());
+                    if (existing == null || !existing.statements().equals(m.statements())) {
+                        issues.add("module '" + moduleKey + "' migration set changed at version "
+                                + m.version());
+                    }
+                }
+            }
+        }
+
+        if (issues.isEmpty()) {
+            Map<String, Map<Integer, Applied>> applied = loadApplied(connection);
+            Map<Integer, Applied> moduleApplied =
+                    applied.computeIfAbsent(moduleKey, k -> new HashMap<>());
+
+            int dbMax = moduleApplied.keySet().stream().mapToInt(Integer::intValue).max().orElse(0);
+            int codeMax = set.lastKey();
+            if (dbMax > codeMax) {
+                issues.add("module '" + moduleKey + "': database schema is at version " + dbMax
+                        + " but this module ships " + codeMax
+                        + " — refusing to run an older module against a newer schema");
+            }
+            if (strictChecksums) {
+                for (Map.Entry<Integer, Applied> a : moduleApplied.entrySet()) {
+                    Migration m = set.get(a.getKey());
+                    if (m != null && !m.checksum().equals(a.getValue().checksum())) {
+                        issues.add("module '" + moduleKey + "' migration " + a.getKey()
+                                + " checksum changed after being applied — refusing to continue");
+                    }
+                }
+            }
+            if (issues.isEmpty()) {
+                for (Migration m : set.values()) {
+                    if (moduleApplied.containsKey(m.version())) {
+                        continue;
+                    }
+                    applyOne(connection, moduleKey, m);
+                }
+            }
+        }
+
+        if (!issues.isEmpty()) {
+            throw new MigrationException(issues);
+        }
+    }
+
     private void applyOne(Connection connection, String moduleKey, Migration m) throws SQLException, MigrationException {
         boolean autoCommit = connection.getAutoCommit();
         connection.setAutoCommit(false);

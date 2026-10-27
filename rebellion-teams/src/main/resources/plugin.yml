@@ -1,0 +1,35 @@
+name: RebellionTeams
+version: '${version}'
+main: net.zaminmc.rebellion.teams.TeamsPlugin
+api-version: '26.3'
+# POSTWORLD: caches load on join; Core (STARTUP) is up first and its database
+# bootstrap is awaited through applyModuleMigrations.
+load: POSTWORLD
+depend: [RebellionAPI, RebellionCore]
+description: Atomic teams with invites, ranks, diplomacy, team chat, proximity text chat and friendly-fire attribution.
+authors: [Abasing]
+website: https://github.com/ZaminMC/RebellionSMP
+
+commands:
+  team:
+    description: Team management (create, invite, accept, kick, leave, ranks, diplomacy, info, history).
+    usage: /team <create|invite|accept|decline|uninvite|kick|leave|rename|disband|promote|demote|transfer|friendlyfire|ally|enemy|neutral|info|members|history|invites>
+  chat:
+    description: Switch chat channel (global, team, proximity).
+    usage: /chat <global|team|proximity>
+
+permissions:
+  rebellion.teams.use:
+    description: Allows basic team membership actions (create, invite handling, leave, info, members).
+    default: true
+  rebellion.teams.chat:
+    description: Allows switching chat channels (global/team/proximity).
+    default: true
+  rebellion.teams.history:
+    description: Allows reading a team's audited management history.
+    default: op
+  rebellion.teams.admin:
+    description: Parent for RebellionTeams administration.
+    default: op
+    children:
+      rebellion.teams.history: true

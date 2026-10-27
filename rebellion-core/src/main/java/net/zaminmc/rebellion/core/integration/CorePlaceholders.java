@@ -3,6 +3,7 @@ package net.zaminmc.rebellion.core.integration;
 import java.util.ArrayList;
 import java.util.List;
 import net.zaminmc.rebellion.api.placeholder.PlaceholderContributor;
+import org.bukkit.entity.Player;
 import org.bukkit.Bukkit;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -36,6 +37,11 @@ public final class CorePlaceholders implements PlaceholderContributor {
 
     @Override
     public @Nullable String resolve(@NotNull String params) {
+        return route(params);
+    }
+
+    @Override
+    public @Nullable String resolveFor(@Nullable Player player, @NotNull String params) {
         return switch (params.toLowerCase(java.util.Locale.ROOT)) {
             case "version" -> version;
             case "modules_healthy" -> healthyRatio.get();

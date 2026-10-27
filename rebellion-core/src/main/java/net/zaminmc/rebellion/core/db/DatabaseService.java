@@ -260,6 +260,29 @@ public final class DatabaseService implements RebellionDatabase {
         });
     }
 
+    @Override
+    public CompletableFuture<Void> applyModuleMigrations(
+            String moduleKey, List<net.zaminmc.rebellion.api.database.MigrationSpec> migrations) {
+        if (moduleKey == null || moduleKey.isBlank() || !moduleKey.matches("[a-z][a-z0-9_]{0,31}")) {
+            throw new IllegalArgumentException(
+                    "module key must match [a-z][a-z0-9_]{0,31}: " + moduleKey);
+        }
+        List<Migration> converted = migrations.stream()
+                .map(spec -> new Migration(spec.version(), spec.description(), spec.statements()))
+                .toList();
+        // Fail-closed on a failed/failed-over bootstrap; bounded wait so a
+        // caller that never bootstrapped cannot hang forever.
+        CompletableFuture<Void> bootstrapGate = ready().orTimeout(60, TimeUnit.SECONDS);
+        return bootstrapGate.thenCompose(v -> submit("migrations:" + moduleKey, con -> {
+            migrationRunner.applyModule(con, moduleKey, converted, config.strictChecksums());
+            Map<String, Integer> applied = migrationRunner.appliedVersions(con);
+            appliedVersionsSnapshot = Map.copyOf(applied);
+            int version = applied.getOrDefault(moduleKey, 0);
+            logger.info("Schema '" + moduleKey + "' at migration version " + version + ".");
+            return null;
+        }));
+    }
+
     // ------------------------------------------------------------------
     // Metrics (used by /rebellion status and diagnostics)
     // ------------------------------------------------------------------
