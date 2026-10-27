@@ -11,6 +11,7 @@ import net.zaminmc.rebellion.core.config.CoreConfigLoader;
 import net.zaminmc.rebellion.core.config.DatabaseConfigLoader;
 import net.zaminmc.rebellion.core.db.DatabaseService;
 import net.zaminmc.rebellion.core.diagnostics.DiagnosticsService;
+import net.zaminmc.rebellion.core.integration.CorePlaceholders;
 import net.zaminmc.rebellion.core.integration.RebellionExpansion;
 import net.zaminmc.rebellion.core.messages.CoreMessages;
 import org.bukkit.command.PluginCommand;
@@ -99,19 +100,11 @@ public final class RebellionCorePlugin extends JavaPlugin {
                 coreResult.config(), dataDirectory, getLogger());
 
         // 3. Database service ------------------------------------------------
+        // Constructed here; the bootstrap starts in step 4 so its completion
+        // handlers can safely reference the fully built CoreState (the async
+        // completion would otherwise race the field assignment).
         database = new DatabaseService(
                 dbConfigResult.config(), dataDirectory, getLogger(), diagnostics);
-        // Core itself owns no versioned tables yet; migrations of feature modules
-        // are registered before their modules enable. Bootstrap starts now.
-        database.bootstrap().whenComplete((v, err) -> {
-            if (err != null) {
-                getSLF4JLogger().error("Database bootstrap failed: {}", err.getMessage());
-                String incident = diagnostics.incident();
-                diagnostics.error(incident, "database bootstrap failed", err instanceof RuntimeException re
-                        ? re : new RuntimeException(err));
-                state.modules().update("core", ModuleState.FAILED, "database bootstrap failed (" + incident + ")");
-            }
-        });
 
         // 4. State + services ------------------------------------------------
         Plugin apiPlugin = getServer().getPluginManager().getPlugin("RebellionAPI");
@@ -126,11 +119,18 @@ public final class RebellionCorePlugin extends JavaPlugin {
                 ModuleRegistry.class, state.modules(), this, ServicePriority.Normal);
         getServer().getServicesManager().register(
                 RebellionDatabase.class, database, this, ServicePriority.Normal);
-        // Mark pending until the bootstrap finished; the callback above flips to
-        // FAILED on error, this handler flips to OPERATIONAL on success.
-        database.ready().whenComplete((v, err) -> {
-            if (err == null) {
-                state.modules().update("core", ModuleState.OPERATIONAL, "");
+
+        // Core itself owns no versioned tables yet; migrations of feature
+        // modules are registered before their modules enable. Bootstrap starts
+        // now — whenComplete fires regardless of whether the async work already
+        // finished, and every handler sees a non-null state.
+        database.bootstrap().whenComplete((v, err) -> {
+            if (err != null) {
+                getSLF4JLogger().error("Database bootstrap failed: {}", err.getMessage());
+                String incident = diagnostics.incident();
+                diagnostics.error(incident, "database bootstrap failed", err instanceof RuntimeException re
+                        ? re : new RuntimeException(err));
+                state.modules().update("core", ModuleState.FAILED, "database bootstrap failed (" + incident + ")");
             }
         });
 
@@ -145,14 +145,20 @@ public final class RebellionCorePlugin extends JavaPlugin {
         }
 
         // 6. Optional integrations --------------------------------------------
+        CorePlaceholders placeholders = new CorePlaceholders(
+                getPluginMeta().getVersion(),
+                () -> state.modules().healthyRatio(),
+                () -> database.healthy()
+                        ? database.backend().name().toLowerCase(java.util.Locale.ROOT)
+                        : "offline",
+                () -> String.valueOf(state.modules().unhealthy().size()));
+        // Core's own parameters are reachable both through the expansion and
+        // directly as a registered contributor for tests/embedders.
+        getServer().getServicesManager().register(
+                net.zaminmc.rebellion.api.placeholder.PlaceholderContributor.class,
+                placeholders, this, ServicePriority.Normal);
         if (getServer().getPluginManager().getPlugin("PlaceholderAPI") != null) {
-            expansion = new RebellionExpansion(
-                    getPluginMeta().getVersion(),
-                    () -> state.modules().healthyRatio(),
-                    () -> database.healthy()
-                            ? database.backend().name().toLowerCase(java.util.Locale.ROOT)
-                            : "offline",
-                    () -> String.valueOf(state.modules().unhealthy().size()));
+            expansion = new RebellionExpansion(placeholders);
             expansion.register();
             getLogger().info("PlaceholderAPI detected; expansion 'rebellion' registered.");
         } else {

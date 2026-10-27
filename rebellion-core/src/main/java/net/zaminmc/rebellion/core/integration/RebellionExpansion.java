@@ -1,8 +1,7 @@
 package net.zaminmc.rebellion.core.integration;
 
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import net.zaminmc.rebellion.api.placeholder.PlaceholderContributor;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -10,10 +9,11 @@ import org.jetbrains.annotations.Nullable;
 /**
  * PlaceholderAPI expansion with the stable identifier {@code rebellion}.
  *
- * <p>Core-level placeholders only; feature modules contribute their own
- * placeholders through future expansions. Every lookup reads in-memory state —
- * placeholders never touch the database (see the API contract in
- * docs/PLACEHOLDERS or RebellionSMP_Codex_Master_Prompt.md §10).</p>
+ * <p>Delegates every lookup to {@link CorePlaceholders}, which owns the core
+ * parameters and routes the rest to every module contributor registered with
+ * the ServicesManager (master prompt §10: a placeholder registry contributed
+ * by modules). Placeholders are pure in-memory reads — no database I/O per
+ * request.</p>
  *
  * <p>This class is only loaded when PlaceholderAPI is present; the guard lives
  * in the bootstrap. Identifier, author and version are stable surface — change
@@ -21,19 +21,10 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class RebellionExpansion extends PlaceholderExpansion {
 
-    private final String version;
-    private final java.util.function.Supplier<String> healthyRatio;
-    private final java.util.function.Supplier<String> backend;
-    private final java.util.function.Supplier<String> degradedModules;
+    private final PlaceholderContributor resolver;
 
-    public RebellionExpansion(String version,
-            java.util.function.Supplier<String> healthyRatio,
-            java.util.function.Supplier<String> backend,
-            java.util.function.Supplier<String> degradedModules) {
-        this.version = version;
-        this.healthyRatio = healthyRatio;
-        this.backend = backend;
-        this.degradedModules = degradedModules;
+    public RebellionExpansion(PlaceholderContributor resolver) {
+        this.resolver = resolver;
     }
 
     @Override
@@ -48,10 +39,10 @@ public final class RebellionExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getVersion() {
-        return version;
+        return "1.0.0";
     }
 
-    /** No persistence — placeholders are pure reads of in-memory state. */
+    /** Registered at boot when PAPI exists; survives reloads of other plugins. */
     @Override
     public boolean persist() {
         return true;
@@ -59,17 +50,6 @@ public final class RebellionExpansion extends PlaceholderExpansion {
 
     @Override
     public @Nullable String onPlaceholderRequest(Player player, @NotNull String params) {
-        return switch (params.toLowerCase(java.util.Locale.ROOT)) {
-            case "version" -> version;
-            case "modules_healthy" -> healthyRatio.get();
-            case "database_backend" -> backend.get();
-            case "modules_degraded" -> degradedModules.get();
-            default -> null; // unknown placeholder: leave it untouched per PAPI contract
-        };
-    }
-
-    /** Utility for feature modules: plain text of a component, null-safe. */
-    public static String plain(Component component) {
-        return PlainTextComponentSerializer.plainText().serialize(component);
+        return resolver.resolve(params); // unknown → null → PAPI leaves text untouched
     }
 }

@@ -27,6 +27,9 @@ its owning module has tests passing in `./gradlew test`.
 | DeluxeMenus-shaped menu engine (registry, validation, click safety) | rebellion-items | tested | MenuEngineTest; live-inventory interaction is a manual gate |
 | Bundled menus: item codex + talisman guide | rebellion-items | tested | parsed from disk in MenuEngineTest |
 | /rebellionitems inspect\|annotate\|reload\|status, /rebellionmenu <id> | rebellion-items | implemented | command logic; server-level verification planned |
+| Annotation flows: block drops, crafting output, smithing output, container open | rebellion-items | implemented | config-gated (default off); event-bounded, no scans |
+| Placeholder contributor architecture (module-routed `rebellion` expansion) | rebellion-api + rebellion-core | implemented | api: PlaceholderContributor; core: CorePlaceholders routes via ServicesManager |
+| `%rebellion_rarity_<material>%` placeholder | rebellion-items | tested | pure registry read; junk input → null (PAPI leaves text untouched) |
 
 ## Roadmap (from master prompt §18; nothing below is implemented)
 
@@ -34,7 +37,7 @@ its owning module has tests passing in `./gradlew test`.
 |---|---|---|
 | 0 | Inspect, research, ledgers, ADRs | researched (this commit set) |
 | 1 | Foundation + module loader contracts | implemented + tested (unit level) |
-| 2 | Item identity, rarity registry, lore service, talisman tiers, DeluxeMenus-shaped menus | first slice implemented + tested; remaining annotation flows (drops, crafting output, container access) and PAPI item placeholders follow-up |
+| 2 | Item identity, rarity registry, lore service, talisman tiers, DeluxeMenus-shaped menus | annotation flow set complete (join/pickup/block-drops/crafting/smithing/container-open, all opt-in); PAPI item placeholder shipped; remaining: per-menu open_command registration, custom item registry (items.yml), admin audit/recovery views |
 | 3 | Teams, chat, friendly-fire attribution | planned |
 | 4 | No-claim wards, calibrated distance, intel | planned |
 | 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | planned |
@@ -47,11 +50,11 @@ its owning module has tests passing in `./gradlew test`.
 
 ## Known limitations (truthful, current)
 
-- The first feature vertical slice (items) exists; its remaining annotation
-  flows (block drops, crafting/smithing output, container access) are not
-  implemented yet — only join normalization and pickup (both opt-in) and the
-  admin annotate command. Stacks' live ItemMeta behavior is a manual
-  Paper-26.3 verification gate (documented in TEST_PLAN).
+- All annotation flows exist behind opt-in switches; their live ItemMeta
+  behavior is a manual Paper-26.3 verification gate (documented in
+  TEST_PLAN). The custom item registry (items.yml: named custom items with
+  talisman families) is not implemented yet; the identity contract reserves
+  the keys for it.
 - MySQL/MariaDB path has no integration test (no server available in CI);
   SQLite is the exercised backend. Not advertised as tested.
 - The plugin has not yet been booted on a live Paper 26.3 server in this

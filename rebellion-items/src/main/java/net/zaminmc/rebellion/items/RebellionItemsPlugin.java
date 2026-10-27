@@ -49,6 +49,12 @@ public final class RebellionItemsPlugin extends JavaPlugin {
             getServer().getServicesManager().register(
                     net.zaminmc.rebellion.items.lore.AnnotateService.class,
                     state.annotator(), this, org.bukkit.plugin.ServicePriority.Normal);
+            // Placeholder contribution: reachable through the core expansion
+            // when PlaceholderAPI is installed; harmless no-op otherwise.
+            getServer().getServicesManager().register(
+                    net.zaminmc.rebellion.api.placeholder.PlaceholderContributor.class,
+                    new net.zaminmc.rebellion.items.command.ItemsPlaceholders(state.rarities()),
+                    this, org.bukkit.plugin.ServicePriority.Normal);
         } catch (Exception e) {
             logger.severe("RebellionAPI/RebellionCore services unavailable: " + e.getMessage());
             getServer().getPluginManager().disablePlugin(this);

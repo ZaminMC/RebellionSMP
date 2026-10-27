@@ -25,6 +25,10 @@ final class ItemsConfigTest {
         assertEquals(ItemsConfig.LorePosition.BOTTOM, result.config().lorePosition());
         assertFalse(result.config().joinNormalization());
         assertFalse(result.config().pickupAnnotation());
+        assertFalse(result.config().blockDropAnnotation());
+        assertFalse(result.config().craftingOutputAnnotation());
+        assertFalse(result.config().smithingOutputAnnotation());
+        assertFalse(result.config().containerOpenAnnotation());
         assertFalse(result.config().allowConsoleActions());
         assertEquals(Map.of(
                 "item_codex", "item_codex.yml",
@@ -39,6 +43,20 @@ final class ItemsConfigTest {
             var result = load(yaml);
             assertTrue(result.valid(), mode + " must parse: " + result.issues());
         }
+    }
+
+    @Test
+    void flowSwitchesAreReadIndividually() {
+        YamlConfiguration yaml = base();
+        yaml.set("annotation.flows.block-drops", true);
+        yaml.set("annotation.flows.container-open", true);
+        var result = load(yaml);
+        assertTrue(result.valid(), () -> result.issues().toString());
+        assertTrue(result.config().blockDropAnnotation());
+        assertTrue(result.config().containerOpenAnnotation());
+        assertFalse(result.config().pickupAnnotation());
+        assertFalse(result.config().craftingOutputAnnotation());
+        assertFalse(result.config().smithingOutputAnnotation());
     }
 
     @Test

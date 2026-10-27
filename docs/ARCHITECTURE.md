@@ -64,7 +64,11 @@ actionable message (a `BootstrapException`):
 5. **Command** `/rebellion status|modules|diagnose|reload` +
    tab completion.
 6. **Optional PlaceholderAPI expansion** (`rebellion`), registered only when
-   PlaceholderAPI is present; pure in-memory reads, never SQL.
+   PlaceholderAPI is present. The expansion delegates to `CorePlaceholders`,
+   which answers the four core parameters and routes everything else through
+   every `PlaceholderContributor` registered in the ServicesManager (the
+   module-contribution contract from the master prompt §10). Pure in-memory
+   reads, never SQL.
 
 Shutdown (`onDisable`) is ordered: module state flipped to DISABLED →
 PAPI expansion unregistered → executor drained (10 s bound; leftovers are

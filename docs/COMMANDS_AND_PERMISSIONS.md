@@ -59,7 +59,11 @@ command only applies rarity/identity to a stack the admin already holds.
 | `%rebellion_modules_healthy%` | `operational/total` ratio |
 | `%rebellion_database_backend%` | `sqlite`/`mysql`, or `offline` when unhealthy |
 | `%rebellion_modules_degraded%` | count of modules not OPERATIONAL |
+| `%rebellion_rarity_<MATERIAL>%` | configured rarity key of the material (items module); unmapped/unknown materials resolve to `common` |
 
 Contract: in-memory reads only (no SQL per lookup); unknown parameters return
 `null` so PAPI leaves the text untouched; registered only when PlaceholderAPI
-is present.
+is present. Modules contribute parameters by registering a
+`PlaceholderContributor` with the ServicesManager; Core's expansion routes
+lookups through every contributor at request time (registration order; no
+parameter name collisions between modules).

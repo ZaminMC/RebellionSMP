@@ -15,6 +15,10 @@ public record ItemsConfig(
         LorePosition lorePosition,
         boolean joinNormalization,
         boolean pickupAnnotation,
+        boolean blockDropAnnotation,
+        boolean craftingOutputAnnotation,
+        boolean smithingOutputAnnotation,
+        boolean containerOpenAnnotation,
         boolean allowConsoleActions,
         Map<String, String> menuRegistry) {
 
@@ -65,6 +69,10 @@ public record ItemsConfig(
 
         boolean joinNormalization = yaml.getBoolean("annotation.flows.join-normalization", false);
         boolean pickupAnnotation = yaml.getBoolean("annotation.flows.pickup", false);
+        boolean blockDropAnnotation = yaml.getBoolean("annotation.flows.block-drops", false);
+        boolean craftingOutputAnnotation = yaml.getBoolean("annotation.flows.crafting-output", false);
+        boolean smithingOutputAnnotation = yaml.getBoolean("annotation.flows.smithing-output", false);
+        boolean containerOpenAnnotation = yaml.getBoolean("annotation.flows.container-open", false);
         boolean allowConsoleActions = yaml.getBoolean("menus.allow-console-actions", false);
 
         Map<String, String> registry = new java.util.LinkedHashMap<>();
@@ -92,7 +100,9 @@ public record ItemsConfig(
             return new LoadResult(null, List.copyOf(issues));
         }
         return new LoadResult(new ItemsConfig(schema, mode, position,
-                joinNormalization, pickupAnnotation, allowConsoleActions,
+                joinNormalization, pickupAnnotation, blockDropAnnotation,
+                craftingOutputAnnotation, smithingOutputAnnotation,
+                containerOpenAnnotation, allowConsoleActions,
                 Map.copyOf(registry)), List.of());
     }
 }

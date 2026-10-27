@@ -162,3 +162,37 @@ Branch: `develop`. Author: Abasing.
 - Complete the remaining annotation flows (drops, crafting output,
   container access) behind explicit config switches; add PAPI item
   placeholders; then Phase 3 (teams) planning ADR.
+
+---
+
+## 2026-10-28 — Session 2 (continued): remaining annotation flows + module placeholder routing
+
+Branch: `develop`. Author: Abasing.
+
+**Implemented**
+- Annotation flows completed (all opt-in, default off): block drops
+  (`BlockDropItemEvent`), crafting output (`CraftItemEvent`), smithing output
+  (`PrepareSmithingEvent`), container open (`InventoryOpenEvent`, one
+  bounded pass). Every handler visits only the stacks the event carries; no
+  scans, no per-tick work.
+- Placeholder contributor architecture: `PlaceholderContributor` added to
+  RebellionAPI; Core's `RebellionExpansion` refactored to delegate to
+  `CorePlaceholders`, which owns the four core parameters and routes unknown
+  ones through all ServicesManager-registered contributors (self-excluded to
+  avoid recursion). RebellionItems registers `ItemsPlaceholders` providing
+  `%rebellion_rarity_<MATERIAL>%` (pure registry read; junk input → null).
+- Bug fix found during refactor: `RebellionCorePlugin` registered its
+  database-bootstrap failure callback before `CoreState` was assigned — an
+  async completion could NPE. Bootstrap now starts after state construction;
+  `whenComplete` semantics keep the failure path identical.
+- Tests: ItemsPlaceholdersTest (4 tests) + new ItemsConfigTest cases for the
+  individual flow switches.
+
+**Commands/results**
+- `./gradlew build` — SUCCESS.
+- `./gradlew test --rerun-tasks` — 110 tests, 0 failures.
+
+**Next task**
+- Custom item registry (`items.yml`: named custom items, talisman families
+  with NORMAL/ARTIFACT/RELIC examples), admin inspection views over annotated
+  inventories, then Phase 3 (teams) ADR + module scaffold.

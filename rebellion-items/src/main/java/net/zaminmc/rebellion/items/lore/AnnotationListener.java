@@ -6,6 +6,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockDropItemEvent;
+import org.bukkit.event.inventory.CraftItemEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
+import org.bukkit.event.inventory.PrepareSmithingEvent;
 import org.bukkit.event.player.PlayerAttemptPickupItemEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.ItemStack;
@@ -14,10 +18,10 @@ import org.bukkit.inventory.ItemStack;
  * Applies rarity annotation at the configured item flows.
  *
  * <p>Bounded by design (master prompt §5.4): no chunk scans, no per-tick
- * work, no full inventory sweeps outside the configured join pass. Each
- * handler only visits the stacks it is handed by the event. Future flows
- * (drops, crafting/smithing output, container access) will be added behind
- * explicit config switches when Phase 2 continues.</p>
+ * work. Each handler only visits the stacks it is handed by the event; the
+ * two inventory passes (join, container open) are bounded by the inventory
+ * size and each stack exactly once. Every flow is an explicit config
+ * opt-in.</p>
  */
 public final class AnnotationListener implements Listener {
 
@@ -64,6 +68,63 @@ public final class AnnotationListener implements Listener {
         ItemStack stack = event.getItem().getItemStack();
         if (mayAnnotate(stack)) {
             annotator.annotate(stack);
+        }
+    }
+
+    /** Bounded: only the dropped stacks this event carries, never a chunk scan. */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlockDrop(BlockDropItemEvent event) {
+        if (!config.blockDropAnnotation()) {
+            return;
+        }
+        for (org.bukkit.entity.Item drop : event.getItems()) {
+            ItemStack stack = drop.getItemStack();
+            if (mayAnnotate(stack)) {
+                annotator.annotate(stack);
+            }
+        }
+    }
+
+    /** Crafting output: annotate the result representation the event carries. */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onCraft(CraftItemEvent event) {
+        if (!config.craftingOutputAnnotation()) {
+            return;
+        }
+        ItemStack result = event.getCurrentItem();
+        if (result != null && mayAnnotate(result)) {
+            annotator.annotate(result);
+        }
+    }
+
+    /** Smithing output: single prepared result stack per event. */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onSmithing(PrepareSmithingEvent event) {
+        if (!config.smithingOutputAnnotation()) {
+            return;
+        }
+        ItemStack result = event.getResult();
+        if (result != null && mayAnnotate(result)) {
+            annotator.annotate(result);
+        }
+    }
+
+    /** Container open: one bounded pass over the top inventory's stacks. */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onContainerOpen(InventoryOpenEvent event) {
+        if (!config.containerOpenAnnotation()) {
+            return;
+        }
+        int touched = 0;
+        for (ItemStack stack : event.getInventory()) {
+            if (stack != null && mayAnnotate(stack) && annotator.annotate(stack)) {
+                touched++;
+            }
+        }
+        final int count = touched;
+        if (count > 0) {
+            logger.fine(() -> "Container-open normalization annotated " + count
+                    + " stack(s) for " + event.getPlayer().getName());
         }
     }
 

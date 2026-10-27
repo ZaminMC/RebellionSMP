@@ -48,6 +48,10 @@ Prefix is the `prefix` key and is prepended by `msg()`.
 | `annotation.lore-position` | enum | `bottom` | `top` or `bottom` |
 | `annotation.flows.join-normalization` | bool | false | one bounded pass over the joining player's held stacks |
 | `annotation.flows.pickup` | bool | false | annotate eligible picked-up stacks |
+| `annotation.flows.block-drops` | bool | false | annotate stacks dropped by a broken block |
+| `annotation.flows.crafting-output` | bool | false | annotate the crafted result stack |
+| `annotation.flows.smithing-output` | bool | false | annotate the prepared smithing result |
+| `annotation.flows.container-open` | bool | false | one bounded pass over a container's stacks when opened (mutates container inventories; deliberate opt-in) |
 | `menus.allow-console-actions` | bool | false | also requires `rebellion.items.admin.menuconsole` at click time |
 | `gui_menus.<id>.file` | string | — | DeluxeMenus-shaped registry; one file per menu under `menus/` |
 

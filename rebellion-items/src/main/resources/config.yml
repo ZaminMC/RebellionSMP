@@ -20,6 +20,15 @@ annotation:
     join-normalization: false
     # Annotate eligible stacks when picked up.
     pickup: false
+    # Annotate item stacks dropped by a broken block.
+    block-drops: false
+    # Annotate the result stack when a player takes a crafted item.
+    crafting-output: false
+    # Annotate the prepared smithing-table result.
+    smithing-output: false
+    # One bounded pass over a container's stacks when opened. This mutates
+    # container inventories - enable deliberately.
+    container-open: false
 
 menus:
   # Console actions ([console] in menu files) are refused unless this is true
