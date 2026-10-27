@@ -49,6 +49,7 @@ its owning module has tests passing in `./gradlew test`.
 | /ward create\|remove\|toggle\|list\|info, /wardadmin list\|remove\|mask | rebellion-wards | implemented | command logic; server-level verification planned |
 | %rebellion_nearest_ward_distance%, %rebellion_ward_count% | rebellion-wards | tested | own-network intel only; decoys/inactive excluded |
 | Wards map marker provider (default off) | rebellion-wards | tested | publishes only when map-markers.publish-wards: true, active real wards only |
+| Dragon 26.3 controller spike (API surface probe + report) | rebellion-dragons | tested | DragonApi263SpikeTest against pinned paper-api 26.3.226; ADR-0008; production controls gated on live experiments |
 
 ## Roadmap (from master prompt §18)
 
@@ -59,7 +60,7 @@ its owning module has tests passing in `./gradlew test`.
 | 2 | Item identity, rarity registry, lore service, talisman tiers, DeluxeMenus-shaped menus | annotation flows complete and opt-in; PAPI item placeholder shipped; custom item registry with talisman family examples shipped; remaining: per-menu open_command registration, admin audit/recovery views over inventories, talisman activation mechanics |
 | 3 | Teams, chat, friendly-fire attribution | implemented + tested (unit level); live-server verification planned |
 | 4 | No-claim wards, calibrated distance, intel | implemented + tested (unit level); km display disabled until calibrated; measured pipeline costs in docs/PERFORMANCE.md; live-server verification planned |
-| 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | planned |
+| 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | spike delivered (ADR-0008: verified API surface, two removals found, live-experiment gate defined); production controls intentionally blocked until live proofs; lineage registry schema is next serverless step |
 | 6 | Three dimension artifacts + Rebellion event | planned |
 | 7 | Rare souls, rituals, tracking | planned |
 | 8 | Brewing progression, potion bags, automation | planned |

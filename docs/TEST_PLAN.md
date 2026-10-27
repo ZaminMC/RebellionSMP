@@ -71,4 +71,23 @@ was run 3× consecutively with `--rerun-tasks` to confirm stability.
       interaction cannot run in plain JUnit (Material class-init requires
       server registries — verified 2026-10-28); those paths stay thin adapters
       verified by this manual gate. MockBukkit does not support 26.3 (its
-      latest targets 1.21).
+      latest targets 1.21). Same applies to `org.bukkit.attribute.Attribute`
+      (probe-caught, ADR-0008).
+- [ ] Teams on Paper 26.3: invite→accept happy path, kick/leave/disband,
+      friendly-fire cancellation matrix (melee/projectile/TNT/pet/cloud),
+      team + proximity chat channels, `/team history` rendering.
+- [ ] Wards on Paper 26.3: create at a placed lodestone anchor; walk an
+      outsider in → one enter alert with the correct unit label (blocks by
+      default; km only after calibrating `world-units-per-kilometer`);
+      leave notice; re-enter inside cooldown stays silent; dwell + masking
+      (held amethyst shard) suppression; decoy labeling; `/wardadmin mask`;
+      anchor break/explosion removes the ward with the breaker message;
+      `%rebellion_nearest_ward_distance%` with PAPI installed.
+- [ ] Dragon live experiments (ADR-0008 gate — required before any
+      production dragon controls): mounted rider position/animation;
+      steering option comparison (velocity vs pathfinder vs phase control
+      with `setAware(false)`); death event timing + `EntityRemoveEvent`
+      cause ordering during the death animation; vanilla first-victory
+      `DragonEggFormEvent` (Paper FQN) + gateway emission +
+      `hasBeenPreviouslyKilled()` behavior across repeated victories;
+      `heal(double)` mid-flight interference.
