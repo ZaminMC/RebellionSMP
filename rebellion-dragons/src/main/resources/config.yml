@@ -1,0 +1,17 @@
+# RebellionDragons configuration.
+#
+# Loaded and validated by net.zaminmc.rebellion.dragons.DragonsConfig
+# (tested in DragonsConfigTest). The module's plugin wiring, commands and
+# listeners are gated on the ADR-0008 live-server proofs; this file ships
+# now so the persistence contract is visible to operators.
+#
+# See docs/decisions/ADR-0009-dragon-lineage-registry.md for the lineage
+# registry model.
+
+dragons:
+  # Maximum obtainable pet-dragon lineages across the ENTIRE server
+  # (all worlds combined). Default 20, hard ceiling 20: the End has at
+  # most 20 eligible vanilla gateways, so a larger value can never be
+  # honored and is rejected at load time - never silently stretched.
+  # Boss victories at the cap follow vanilla rewards but mint nothing.
+  max-lineages: 20
