@@ -323,3 +323,48 @@ Nothing in the admin family mints discoveries, sessions or effects.
 | Placeholder | Value |
 |---|---|
 | `%rebellion_ritual_<key>_discovered%` | `true`/`false` — has the viewer discovered knowledge key `<key>`; resolves from the join-loaded in-memory cache (never a database read per request) |
+
+## RebellionAlchemy (Phase 8, controller slice — ADR-0020)
+
+All player feedback renders through the module's `messages.yml` catalog
+(ADR-0012). Authority never comes from client input: cost checks are
+server-side pure math over storage contents, targets resolve to known
+UUIDs only (bag delivery additionally requires the player online — items
+must land somewhere), and every state change rides the ADR-0019 service
+CASes through the claim protocol.
+
+### `/brewing` — progression surface (permission `rebellion.alchemy.use`, default true)
+
+| Subcommand | Behavior | Enforced by |
+|---|---|---|
+| `status` | Derived level, XP into the level, XP to the next (or "the maximum"), owned-unlock and live-rule counts | derived `Leveling` walk over the progress row |
+| `unlocks` | Every unlock definition with kind, required level, owned/available/disabled state and the holder's efficiency-reduced cost | pure `Costs` math |
+| `unlock <key>` | The purchase driver: verify the reduced cost set → `reserveUnlock` (digest = refund evidence) → remove items (leftover = race detector, releases + refunds at the feet) → all-or-none commit; an admin grant that landed between reserve and commit still spends the claim (typed) | reserve/commit CASes |
+| `rules` | The viewer's live rules in evaluation order (id prefix, trigger, potion, threshold, cooldown, priority, storage, on/off) | conflict-order read |
+| `rules add <trigger> <potion> [threshold] <cooldown> <priority> <storage>` | Defines a rule after every operator-policy gate passes (trigger whitelisted, potion whitelisted, threshold in bounds, cooldown at/above the floor, priority in range, per-player cap); HEALTH_BELOW requires its threshold, every other trigger rejects one | `defineAutoRule` policy + row gates |
+| `rules toggle <idPrefix>` | Pauses/resumes the rule (audited, ownership-guarded) | toggle CAS |
+| `rules remove <idPrefix>` | Removes the rule (stamped, rows kept for forensics; genuinely idempotent) | removal CAS |
+
+Console is denied the whole `/brewing` family (player-only by design —
+verified in the boot smoke).
+
+### `/alchemyadmin` — audit + grants + mint (permission `rebellion.alchemy.admin`, default op)
+
+| Subcommand | Behavior |
+|---|---|
+| `events <player>` | The 10 most recent audit rows for a player (XP awards with LEVEL_UP outcomes, unlock commits, rule lifecycle, auto-consume executions with FIRED/FIRED_UNSTAMPED outcomes) |
+| `grant <player> <key>` | The ADR-0019 admin-grant path (idempotent, audited; deliberately ignores the definition's `enabled` flag — a staff override is a recovery tool) |
+| `bag <player> <key> [amount 1..16]` | The restricted potion-bag mint: stamped, unique-`bag_id` items (never stackable); leftovers drop at the player's feet; online players only |
+
+Nothing in the admin family mints XP or clears cooldowns; grants are
+audited rows and the mint produces stamped items — the items-module
+restricted-mint discipline.
+
+### PlaceholderAPI placeholders (expansion `rebellion`) — alchemy
+
+| Placeholder | Value |
+|---|---|
+| `%rebellion_brewing_level%` | The viewer's derived brewing level (the master prompt §10 minimum placeholder) — in-memory mirror read |
+| `%rebellion_brewing_total_xp%` | Lifetime accumulated XP |
+| `%rebellion_brewing_next_level_xp%` | XP still needed for the next level (0 at max) |
+| `%rebellion_brewing_unlock_<key>%` | Operator-localized owned/available wording — the same `/brewing unlocks` vocabulary (MiniMessage-colored, never bare booleans) |

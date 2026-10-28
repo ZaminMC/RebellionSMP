@@ -1524,3 +1524,101 @@ wiring, live trigger evaluation (health/fire/portal/fall), commands,
 placeholders and menus are all controller-phase. No gameplay is claimed
 verified. Next implementable slice: the alchemy controller, or operator
 side-work (wandering_soul calibration, dragons ride-feel report).
+
+## Session 17 — Phase 8: the alchemy controller slice (ADR-0020)
+
+**Scope.** RebellionAlchemy becomes the **ninth installable plugin**:
+everything ADR-0019 left to the live side — where XP comes from, what a
+POWER unlock does, what a potion bag is, how a rule fires, and the
+`/brewing` surface — riding the tested persistence contract unchanged.
+
+**Live-API facts proven first (§4, javap against the pinned paper-api
+26.3 build 226 jar).** `PotionMeta.getBasePotionType()/getAllEffects()`
+are the modern surface (the old `org.bukkit.potion.Potion` class is
+gone); `PotionEffect.withDuration/withAmplifier` rewrite effects
+cleanly; `BrewEvent.getResults()/getContents()` complete stands;
+`InventoryMoveItemEvent` is cancellable (the hopper guard);
+`Damageable.getHealth/getMaxHealth`, `Entity.getFireTicks/getFallDistance/isOnGround`
+and `WorldInfo.getEnvironment()` are the trigger inputs;
+`Bukkit.createInventory(holder, size, Component)` takes custom holders.
+`ItemStack` construction was re-probed and confirmed registry-bound
+(`Material.asItemType()` → RegistryAccess, the ADR-0015 lesson) — so the
+bag codec and all ItemStack-array math are boot-smoke gated, and only the
+pure-list math is unit-pinned.
+
+**What shipped.**
+
+- **Brewing XP wiring (loader stamps).** Stands are anonymous, so the
+  stand block's PDC carries the last ingredient-loader's UUID (stamped
+  on place, refreshed on any load click). `BrewEvent` (MONITOR) awards
+  `xp-per-brew × completed result slots`; source keys
+  `brew:<world>:<x>:<y>:<z>:<second-bucket>` are collision-proof (cycles
+  take 400 ticks) and re-delivery-safe (the ADR-0019 gate). Unstamped
+  stands go quiet — self-healing, no retroactive credit.
+- **POWER boosts at drink time.** Brewed items stay vanilla; a held
+  matching unlock rewrites the applied effect over the potion's own
+  values (`PotionBoost` pure math; strongest-amplifier-then-duration
+  matching rule pinned serverless). Manual drinks and auto-consumptions
+  share one path; cold caches miss honestly, never block.
+- **Potion bags.** Contents ride the item's PDC (Base64 codec); the open
+  inventory is a transient mirror persisted after EVERY interaction and
+  at close — the crash window can only lose an in-flight event, never
+  duplicate. Nesting ban on click/drag; bags never ride hoppers; a bag
+  as a crafting ingredient blocks the result; furnace insertion
+  cancelled; unique `bag_id`s prevent stacking; `/alchemyadmin bag` is
+  the only mint; the required-unlock gate and the efficiency capacity
+  bonus apply at open.
+- **Auto-consume evaluator.** One periodic pass (default 2 s) over
+  online players' cached live rules, first match per trigger, storage-
+  scoped location (BAG = PDC surgery, INVENTORY = exact slot/off-hand
+  decrement, ANY = bags first), then the claim protocol exactly:
+  reserve → remove/apply under the reservation → commit stamps the
+  cooldown authority all-or-none. Inventory-changed-mid-execution
+  releases (the §5.7 safe fallback); efficiency cooldown reductions sum
+  and floor at the policy minimum.
+- **Commands + placeholders.** `/brewing status|unlocks|unlock|rules`
+  (the purchase driver mirrors `/ritual`: verify → reserve → remove with
+  leftover detection + refund → commit; typed refusals all mapped) and
+  `/alchemyadmin events|grant|bag` (console-legal, known-UUID-only,
+  online-only bag delivery). `%rebellion_brewing_level%` (the §10
+  minimum), `_total_xp`, `_next_level_xp`, and `_unlock_<key>` localized
+  wording — the session-15 vocabulary discipline.
+- **Wiring.** `AlchemyPlugin` (config + optional controller section +
+  ADR-0012 catalog + migration + listeners + evaluator/sweep tasks +
+  contributor registration + module health + reverse-order final
+  sweep); `AlchemyPlayerCache` (three read-only slices per viewer,
+  refreshed by the module's own mutation paths); boot smoke now installs
+  NINE jars.
+
+**Defect caught by the tests before ship.** `on:`/`off:` as YAML mapping
+keys are YAML 1.1 booleans — SnakeYAML resolves them to stringified
+`true`/`false`, so the rule-state and toggle message keys silently
+didn't exist. Renamed to `active`/`paused`/`resumed` vocabulary; the
+messages pin test caught it twice (rule state, then toggle) — the same
+landmine class as the session-8 entities find.
+
+**Evidence.** Boot smoke on Paper 26.3 build 226 with the EXISTING data
+folder: nine jars in order, RebellionAlchemy operational (2 unlock
+definitions enabled, 2 bag tiers, 8 whitelisted potions, evaluator every
+2 s), console player-only + admin online-only/known-UUID guards rendered
+correctly, minutes of evaluator cycles, clean reverse-order shutdown,
+zero exceptions (`grep -cE "ERROR|Exception"` = 0). Full suite **552
+tests / 0 failures** (38 new: 6 costs + 4 triggers + 5 source-keys + 5
+boost + 4 controller-config + 5 drink-matching + 4 placeholders + 5
+messages), forced fresh execution, stable.
+
+**Docs.** ADR-0020; COMMANDS_AND_PERMISSIONS (the `/brewing` +
+`/alchemyadmin` families + the four placeholders); MASTER_LEDGER (the
+alchemy section refreshed to two-slice reality, the Phase 8 roadmap row
+completed, the session-limitations note refreshed); ARCHITECTURE (the
+module section header/intro updated from "persistence layer only" to the
+two-slice reality); README (the alchemy row: installable).
+
+**Honest scope.** Rule evaluation against real health/fire/portal/fall
+states, drink-boost feel, bag UX (opening, shift-clicking, closing under
+load) and auto-consume timing are interactive gates — unclaimed until a
+player exercises them. Custom brewing recipes beyond vanilla remain
+future scope (recorded in the ADR + ledger). Next implementable slice:
+Phase 9 (prison/death-score/economy persistence groundwork), or the
+operator-side passes (wandering_soul calibration, dragons ride-feel
+report).

@@ -1,0 +1,28 @@
+name: RebellionAlchemy
+version: '${version}'
+main: net.zaminmc.rebellion.alchemy.AlchemyPlugin
+api-version: '26.3'
+# POSTWORLD: the migration (rb_alchemy_* schema v1, ADR-0019) runs through
+# Core's database bootstrap during enable; nothing else is depended on.
+load: POSTWORLD
+depend: [RebellionAPI, RebellionCore]
+description: Brewing progression (derived levels, XP for stand loaders), POWER boosts at drink time, claim-protocol unlock purchases, potion bags with PDC-carried contents, policy-gated auto-consumption rules, admin audit/mint (ADR-0019/0020).
+authors: [Abasing]
+website: https://github.com/ZaminMC/RebellionSMP
+
+commands:
+  brewing:
+    description: Brewing surface (status, unlock list, claim-protocol purchases, auto-drink rule management).
+    usage: /brewing <status|unlocks|unlock <key>|rules>
+  alchemyadmin:
+    description: RebellionAlchemy administration (audit events, grant unlocks, mint potion bags).
+    usage: /alchemyadmin <events <player>|grant <player> <key>|bag <player> <key> [amount]>
+    permission: rebellion.alchemy.admin
+
+permissions:
+  rebellion.alchemy.use:
+    description: Allows reading one's brewing status, purchasing unlocks through the claim protocol and managing one's own auto-drink rules (all state changes are service-CAS-guarded).
+    default: true
+  rebellion.alchemy.admin:
+    description: Allows auditing player alchemy events, granting unlocks and minting potion bags.
+    default: op

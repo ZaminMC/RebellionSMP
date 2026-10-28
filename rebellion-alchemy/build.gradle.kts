@@ -50,3 +50,13 @@ tasks.test {
         showExceptions = true
     }
 }
+
+// Expand ${version} in plugin.yml (the session-10 boot-smoke lesson: an
+// unexpanded placeholder ships a broken descriptor that Paper refuses).
+tasks.processResources {
+    val version = project.version.toString()
+    inputs.property("version", version)
+    filesMatching("plugin.yml") {
+        expand("version" to version)
+    }
+}

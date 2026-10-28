@@ -36,7 +36,8 @@ command -v "$JAVA_BIN" >/dev/null || { echo "java not found (set JAVA_BIN)" >&2;
 
 # The module jars that ship plugin.yml, in install order (master prompt §17).
 # Updated with each new installable module: dragons (session 10),
-# artifacts (session 11), rpg (session 12/14 — ADR-0017 controller slice).
+# artifacts (session 11), rpg (session 12/14 — ADR-0017 controller slice),
+# alchemy (session 16 — ADR-0020 controller slice).
 MODULE_DIRS=(
   "rebellion-api/build/libs"
   "rebellion-core/build/libs"
@@ -46,6 +47,7 @@ MODULE_DIRS=(
   "rebellion-dragons/build/libs"
   "rebellion-artifacts/build/libs"
   "rebellion-rpg/build/libs"
+  "rebellion-alchemy/build/libs"
 )
 
 case "${1:-}" in

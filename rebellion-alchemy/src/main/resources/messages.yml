@@ -1,0 +1,102 @@
+# RebellionAlchemy messages. MiniMessage; every tag explicitly closed (the
+# loader validates this). Placeholders like <key> / <count> are filled by
+# code at render time as unparsed/component values - user text is never
+# parsed as MiniMessage, so injection is structurally impossible.
+#
+# This file is the module's complete player-feedback contract: every key
+# any command, listener or controller path renders is pinned by
+# AlchemyMessagesTest, which strict-parses this bundled file.
+
+prefix: "<gradient:#27ae60:#16a085>Alchemy</gradient> <dark_gray>»</dark_gray> <gray></gray>"
+
+common:
+  no-permission: "<red>You do not have permission to do that.</red>"
+  unavailable: "<red>That action is unavailable right now; nothing was changed. Please try again in a moment.</red>"
+
+usage: '<gray>Usage: /brewing \<status|unlocks|unlock \<key>|rules> - /brewing rules manages your auto-drink rules.</gray>'
+player-only: "<red>Brewing is player-only.</red>"
+
+brewing:
+  status:
+    line: "<gray>You are a</gray> <white>level <level></white> <gray>brewer</gray> <gray>(<xp> XP into the level, <next> to the next).</gray>"
+    maxed: "<gray>You are a</gray> <white>level <level></white> <gray>brewer - the maximum.</gray>"
+    unlocks: "<gray>Unlocks held:</gray> <white><count></white>"
+    rules: "<gray>Auto-drink rules:</gray> <white><count></white>"
+  unlocks:
+    header: "<gray>Unlocks known to this server:</gray>"
+    line: "<gray>•</gray> <white><key></white> <gray>(<kind>, level <level>) -</gray> <state> <gray>-</gray> <cost>"
+    state:
+      owned: "<green>owned</green>"
+      unowned: "<aqua>available</aqua>"
+      disabled: "<dark_red>disabled</dark_red>"
+  unlock:
+    usage: '<red>Usage: /brewing unlock \<key> - hold the full cost, then buy.</red>'
+    unknown: "<red>No unlock named '<key>' exists.</red>"
+    disabled: "<red>That unlock is disabled on this server.</red>"
+    missing: "<red>You lack the cost: <missing>.</red>"
+    ok: "<green>Purchased - '<key>' is yours. Its power applies from the next sip.</green>"
+    already-owned: "<yellow>Purchased, but you already owned '<key>' - the cost is spent.</yellow>"
+    repeated: "<gray>That purchase already went through - nothing repeated.</gray>"
+    removed-mid-purchase: "<red>Your inventory changed mid-purchase - the reservation was released and nothing was consumed. The removed items are at your feet.</red>"
+    level-too-low: "<red>Your brewing level is too low - <detail>.</red>"
+    prerequisite: "<red>A prerequisite is missing - <detail>.</red>"
+    owned: "<red>You already own that unlock.</red>"
+    reservation-held: "<red>An unfinished purchase reservation is already open - it clears itself in moments.</red>"
+  rules:
+    usage: '<red>Usage: /brewing rules \<add|toggle|remove> ... - bare /brewing rules lists them.</red>'
+    header: "<gray>Your auto-drink rules (in evaluation order):</gray>"
+    none: "<gray>No rules yet - /brewing rules add to create one.</gray>"
+    line: "<gray>• <id></gray> <white><trigger></white> <gray>-></gray> <aqua><potion></aqua> <gray>(threshold <threshold>, cooldown <cooldown>s, priority <priority>, from <storage>)</gray> <state>"
+    state:
+      active: "<green>on</green>"
+      paused: "<red>off</red>"
+    unknown-id: "<red>No unique rule matches that id prefix.</red>"
+    add:
+      usage: '<red>Usage: /brewing rules add \<trigger> \<potion> [threshold] \<cooldown> \<priority> \<storage> - e.g. /brewing rules add health_below healing 40 60 1 any</red>'
+      bad-trigger: "<red>Unknown trigger - HEALTH_BELOW, BURNING, NETHER_ENTRY or FALLING.</red>"
+      bad-potion: "<red>Unknown potion '<potion>' - PotionType names like HEALING.</red>"
+      bad-threshold: "<red>The threshold must be a whole number of percent.</red>"
+      bad-storage: "<red>Storage must be BAG, INVENTORY or ANY (got '<storage>').</red>"
+      ok: "<green>Rule <id> defined.</green>"
+      refused:
+        trigger: "<red>That trigger is disabled by the operator policy.</red>"
+        potion: "<red>That potion is not in the policy whitelist.</red>"
+        threshold: "<red>The threshold must be between <min> and <max> percent.</red>"
+        cooldown: "<red>The cooldown must be at least <min>s - the anti-bot floor.</red>"
+        priority: "<red>The priority must be between <min> and <max>.</red>"
+        cap: "<red>You already hold the maximum number of live rules - remove one first.</red>"
+    toggle:
+      paused: "<yellow>Rule <id> paused.</yellow>"
+      resumed: "<green>Rule <id> resumed.</green>"
+    remove:
+      ok: "<green>Rule <id> removed.</green>"
+      noop: "<gray>That rule was already removed.</gray>"
+
+bag:
+  title: "<dark_green>Potion <key></dark_green>"
+  unknown: "<red>This bag references an unknown or disabled tier - contact staff.</red>"
+  locked: "<red>That bag tier requires the '<unlock>' unlock.</red>"
+  nesting: "<red>A bag cannot hold another bag.</red>"
+  # 'bag.title' carries <key>; the rest carry no placeholders.
+
+auto:
+  fired: "<gray>Auto-drink:</gray> <aqua><potion></aqua> <gray>consumed (<trigger> trigger; next eligible in <seconds>s).</gray>"
+
+admin:
+  usage: '<red>Usage: /alchemyadmin \<events \<player>|grant \<player> \<key>|bag \<player> \<key> [amount]></red>'
+  events-usage: '<red>Usage: /alchemyadmin events \<player></red>'
+  events-header: "<gray>Audit trail for <name> (last 10):</gray>"
+  events-none: "<gray>No audit events yet.</gray>"
+  events-line: "<gray>•</gray> <white><type></white> <gray>-</gray> <yellow><outcome></yellow> <gray>-</gray> <detail>"
+  player-unknown: "<red>No known player by that name - admin actions never resolve guesses.</red>"
+  grant-usage: '<red>Usage: /alchemyadmin grant \<player> \<key></red>'
+  grant:
+    ok: "<green>Unlock '<key>' granted to <name>.</green>"
+    noop: "<yellow><name> already owned '<key>' - nothing changed.</yellow>"
+    unknown: "<red>No unlock named '<key>' exists.</red>"
+  bag-usage: '<red>Usage: /alchemyadmin bag \<player> \<key> [amount 1..16]</red>'
+  bag-online-only: "<red>Bag delivery needs the player online (items must land somewhere).</red>"
+  bag-unknown: "<red>No bag tier named '<key>' exists (or it is disabled).</red>"
+  bag:
+    minted: "<green>Minted <count> '<key>' bag(s) for <name> (leftovers dropped at their feet).</green>"
+    received: "<gray>Staff minted you <count> '<key>' bag(s) - right-click to open.</gray>"

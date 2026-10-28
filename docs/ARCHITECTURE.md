@@ -615,15 +615,19 @@ nothing auto-spawns from a stock install, the wards calibrated-scale
 precedent). `RpgConfigTest` pins the documented YAML and `defaults()` to
 each other.
 
-## Alchemy module (rebellion-alchemy, Phase 8 groundwork — persistence layer only, ADR-0019)
+## Alchemy module (rebellion-alchemy, Phase 8 — persistence ADR-0019 + controller ADR-0020)
 
 Brewing progression, potion bags and auto-consumption (master prompt §5.7).
-The persistence-first groundwork move a fourth time (ADR-0009/0013/0016
-precedent): the module joins the build **serverless** — no plugin
-descriptor, no listeners, no inventory code — and everything that is
-*state* is pinned in schema, service and tests. The controller phase (bag
-items + inventory safety events, brewing-stand wiring, live trigger
-evaluation, commands, placeholders, menus) will ride this contract.
+Delivered in two slices: the ADR-0019 persistence layer (five tables under
+module key `alchemy` — derived brewing levels over an idempotent atomic XP
+accumulate, the two-path unlock ledger bought through the claim protocol,
+player-defined auto-consumption rules under a strict operator policy) and
+the ADR-0020 controller slice (brewing-stand loader stamps feeding the XP
+wiring, POWER boosts applied at drink time over the potion's own values,
+potion bags whose contents ride the item's PDC with every §5.7 inventory
+safety guard, the periodic auto-consume evaluator riding execution claims,
+`/brewing` + `/alchemyadmin`, the `%rebellion_brewing_level%` family —
+the ninth installable plugin, boot-verified).
 
 **Authority**: `AlchemyService` — future-based transactional orchestration
 over five tables (module key `alchemy`): `rb_alchemy_progress` (the atomic

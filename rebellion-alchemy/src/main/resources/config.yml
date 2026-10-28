@@ -1,0 +1,127 @@
+# RebellionAlchemy configuration (ADR-0019/0020).
+#
+# Four definition families plus an optional controller section. Invalid
+# values are collected at load (every issue reported) and the module
+# refuses to enable with them - nothing half-loads.
+
+alchemy:
+  # ------------------------------------------------------------------
+  # The brewing curve (ADR-0019 §2): the derived-level walk. Advancing
+  # from level n to n+1 costs level-xp-base + (n-1) * level-xp-growth XP;
+  # levels clamp at max-level. Levels are NEVER stored - they derive from
+  # total XP on every read, so a curve rebalance applies on the next
+  # read with zero migration.
+  # ------------------------------------------------------------------
+  brewing:
+    max-level: 30
+    level-xp-base: 100
+    level-xp-growth: 25
+    # The default award per completed brew result slot (the stand's
+    # ingredient loader earns it; ADR-0020 section 1).
+    xp-per-brew: 10
+
+  # ------------------------------------------------------------------
+  # Unlock definitions - the two progression paths of section 5.7.
+  # kind POWER: names the potion type it upgrades at drink time
+  # (amplifier-bonus stacks on the potion's own amplifier; duration is
+  # multiplied). kind EFFICIENCY: cost-reduction (a fraction off future
+  # purchase prices, floored at 1 per item - a discount can never mint
+  # free components), bag-capacity-bonus (extra bag slots, global cap 54)
+  # and auto-cooldown-reduction (seconds off rule cooldowns, floored at
+  # the auto-rules minimum). Kind-mismatched fields are refused at load:
+  # efficiency must never quietly add combat strength.
+  # ------------------------------------------------------------------
+  unlocks:
+    potent_swiftness:
+      kind: POWER
+      enabled: true
+      required-level: 5
+      prerequisites: []
+      cost:
+        - {material: amethyst_shard, amount: 8}
+      potion-type: SWIFTNESS
+      amplifier-bonus: 1
+      duration-multiplier: 1.5
+    frugal_brewing:
+      kind: EFFICIENCY
+      enabled: true
+      required-level: 3
+      prerequisites: []
+      cost:
+        - {material: gold_ingot, amount: 4}
+      cost-reduction: 0.10
+      bag-capacity-bonus: 0
+      auto-cooldown-reduction: 15
+
+  # ------------------------------------------------------------------
+  # Potion-bag tiers (ADR-0020 section 3). Bag items are minted by
+  # /alchemyadmin bag; contents live in the item's PDC and travel with
+  # the item (drops, chests, keepInventory). required-unlock: an existing
+  # unlock key gating the tier, or empty for open access.
+  # ------------------------------------------------------------------
+  bags:
+    satchel:
+      enabled: true
+      capacity: 9
+      material: leather
+      required-unlock: ""
+    satchel_large:
+      enabled: true
+      capacity: 18
+      material: leather
+      required-unlock: frugal_brewing
+
+  # ------------------------------------------------------------------
+  # The auto-consumption operator policy (ADR-0019 section 4): the
+  # master prompt's whitelist of allowed triggers/effects and the
+  # anti-bot floor, enforced at rule definition time.
+  # ------------------------------------------------------------------
+  auto-rules:
+    max-rules-per-player: 5
+    # The per-rule cooldown floor - the "never make an infinitely
+    # replenishing potion bot" guarantee.
+    min-cooldown-seconds: 60
+    min-priority: 1
+    max-priority: 100
+    triggers:
+      HEALTH_BELOW:
+        enabled: true
+        # A rule may only pick a health percent inside these bounds.
+        min-threshold: 1
+        max-threshold: 99
+      BURNING:
+        enabled: true
+      NETHER_ENTRY:
+        enabled: true
+      FALLING:
+        # Disabled by default - a deliberate opt-in feel decision.
+        enabled: false
+    # The potion whitelist (PotionType names) a rule may reference.
+    allowed-potion-types:
+      - HEALING
+      - REGENERATION
+      - FIRE_RESISTANCE
+      - SWIFTNESS
+      - STRENGTH
+      - NIGHT_VISION
+      - WATER_BREATHING
+      - SLOW_FALLING
+
+  # ------------------------------------------------------------------
+  # Optional controller section (ADR-0020): absent = shipped defaults.
+  # Restart-only - the tasks read these at enable time.
+  # ------------------------------------------------------------------
+  controller:
+    # How often the auto-consume evaluator passes over online players'
+    # live rules (seconds).
+    auto-eval-interval-seconds: 2
+    # Reconciliation cadence: stale-claim release (crash recovery).
+    sweep-interval-seconds: 60
+    # A RESERVED claim older than this is auto-released by the sweep
+    # (the digest row stays as refund evidence).
+    reservation-stale-seconds: 120
+    # The FALLING trigger's fall-distance bound in blocks.
+    fall-threshold-blocks: 8
+    # Whether executed auto-consumptions tell the player (the audit row
+    # always exists regardless).
+    auto-consume-notify: true
