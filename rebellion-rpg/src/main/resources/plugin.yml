@@ -1,0 +1,28 @@
+name: RebellionRPG
+version: '${version}'
+main: net.zaminmc.rebellion.rpg.RpgPlugin
+api-version: '26.3'
+# POSTWORLD: the migrations (rb_rpg_* schema v1, ADR-0016) run through
+# Core's database bootstrap during enable; nothing else is depended on.
+load: POSTWORLD
+depend: [RebellionAPI, RebellionCore]
+description: Rare-soul encounters, ritual casting (reserve/remove/commit claim protocol), tracking signals with counter-ritual masks, and persisted discoveries (ADR-0016/0017).
+authors: [Abasing]
+website: https://github.com/ZaminMC/RebellionSMP
+
+commands:
+  ritual:
+    description: Ritual surface (list definitions, cast knowledge rituals, track a player, mask against tracking, status, on-demand signal, release a stuck reservation).
+    usage: /ritual <list|cast|track|mask|status|signal|release>
+  rpgadmin:
+    description: RebellionRPG administration (audit events, revoke sessions).
+    usage: /rpgadmin <events <player>|revoke <sessionId> [reason]>
+    permission: rebellion.rpg.admin
+
+permissions:
+  rebellion.rpg.use:
+    description: Allows casting rituals, reading one's own status and releasing one's own reservations (all state changes are service-CAS-guarded).
+    default: true
+  rebellion.rpg.admin:
+    description: Allows auditing player ritual events and revoking tracking sessions.
+    default: op

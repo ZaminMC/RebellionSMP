@@ -1276,3 +1276,73 @@ a live experiment before any claim either way.
 feel report); then either continue the rebellion-rpg controller slice
 (ADR-0017, WIP classes already compile) or the E4b first-victory
 interactive pass.
+
+## 2026-10-28 — Session 14 (part 2): the RPG controller slice — RebellionRPG becomes the eighth installable plugin (ADR-0017)
+
+**Branch:** `develop` · **Base:** `0b37f42`
+
+**Context.** Session 13 landed the ADR-0016 persistence layer;
+session 12 had started the controller slice (config section, soul-entity
+typing, pure helpers) as a WIP checkpoint which session 14 part 1
+brought to a green compile (the `floorMod(double,int)` fix). This part
+finishes the controller surface with **zero schema changes**.
+
+**Shipped (rebellion-rpg):**
+
+1. `RpgPlugin` + `plugin.yml` + `messages.yml` + `config.yml` — the
+   eighth installable jar; `${version}` expanded via processResources
+   (the session-10 lesson, applied proactively this time).
+2. `SoulController` + `SoulListener` (ADR-0017 entity half): spawner on
+   the pure `SpawnRules` verdicts (anchor-selected site in loaded
+   surroundings, biome re-checked at the drawn column), ledger CAS as
+   the only begin authority, souls persistent/faraway-kept/aware-off,
+   damage-protected, one-winner right-click completion, non-UNLOAD
+   vanish → row despawn (E7 lesson), TTL expiry + entity cleanup on the
+   sweep. The shipped `wandering_soul` stays disabled — no soul ever
+   spawns on uncalibrated world data (§5.3).
+3. `RitualCommand` (ADR-0017 casting half): `/ritual
+   list|cast|track|mask|status|signal|release` as the claim-protocol
+   driver — verify → reserve → remove → commit, leftover-map race
+   detector with release + exact refund, known-UUID-only target
+   resolution, REGION signals via `SignalMath` (compass + bucket
+   labels, effective tier only, "beyond sensing" for offline targets).
+4. `RpgAdminCommand` (`/rpgadmin events <player>|revoke <sessionId>
+   [reason]`) — read-only audit plus the idempotent audited revoke; the
+   whole family mints nothing.
+5. `RpgPlaceholders` + `RpgCacheListener`:
+   `%rebellion_ritual_<key>_discovered%` over a join-loaded, evict-on-
+   quit, grant-refreshed in-memory cache — placeholder resolution never
+   touches the database (PlaceholderContributor contract, §10).
+6. Reconciliation sweep (stale claims, TTL expiry, soul cleanup) every
+   `sweep-interval` + final pass at disable, with per-row fault
+   isolation (the session-12 sweep-NPE lesson).
+7. `scripts/boot-smoke.sh` MODULE_DIRS updated to all eight installable
+   jars (the list had silently rotted at five modules since the
+   ADR-0011 harness landed).
+
+**Tests actually run:** `./gradlew build` — full suite **437 green,
+0 failed** (new: RpgMessagesTest contract pin, SpawnRulesTest,
+SignalMathTest; all ADR-0016 RpgServiceIT invariants still green).
+**Boot smoke on Paper 26.3 build 226** (clean first boot, eight jars in
+order): RebellionRPG extracts both resources, applies schema v1, enables
+with the quiet-spawner log line, `rebellion modules` reports `rpg
+operational`, console `/ritual` renders the player-only catalog message,
+3+ sweep cycles with zero exceptions (the only ERROR line is the
+pre-documented flat-world generator warning, ADR-0008), graceful
+reverse-order shutdown with the final sweep.
+
+**Docs:** ADR-0017 (the controller decision), MASTER_LEDGER (controller
+section + honest interactive-scope note), COMMANDS_AND_PERMISSIONS
+(/ritual, /rpgadmin, the placeholder), this worklog.
+
+**Honest scope.** Player-level flows are interactive-untested: reagent
+feel, signal pulse timing and a live spawner on a calibrated map need a
+real player on a real world (the smoke world is a flat void — it cannot
+exercise the spawner at all, by design). The §5.3 NPC-integration
+question stays open only for quest scripts richer than right-click-help.
+No ride/feel claim is made for anything in this slice.
+
+**Next task.** The operator rides dev.10 (dragons feel + sweep silence
+report); the interactive pass for rpg (cast/track/mask with a real
+inventory, signal pulse, then calibrate + enable `wandering_soul` on
+the live map); or Phase 8 groundwork (brewing progression).

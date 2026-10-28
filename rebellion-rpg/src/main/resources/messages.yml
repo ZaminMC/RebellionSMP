@@ -1,0 +1,92 @@
+# RebellionRPG messages. MiniMessage; every tag explicitly closed (the
+# loader validates this). Placeholders like <key> / <target> are filled by
+# code at render time as unparsed/component values - user text is never
+# parsed as MiniMessage, so injection is structurally impossible.
+#
+# This file is the module's complete player-feedback contract: every key
+# any command, listener or controller path renders is pinned by
+# RpgMessagesTest, which strict-parses this bundled file.
+
+prefix: "<gradient:#2e86de:#8e44ad>Rebellion</gradient> <dark_gray>»</dark_gray> <gray></gray>"
+
+common:
+  no-permission: "<red>You do not have permission to do that.</red>"
+  unavailable: "<red>That action is unavailable right now; nothing was changed. Please try again in a moment.</red>"
+
+usage: '<gray>Usage: /ritual \<list|cast \<key>|track \<key> \<player>|mask \<key>|status|signal|release> - use /ritual list to see every ritual and its reagents.</gray>'
+player-only: "<red>Rituals are player-only.</red>"
+
+ritual:
+  list:
+    header: "<gray>Rituals known to this server:</gray>"
+    line: "<gray>•</gray> <white><key></white> <gray>(<kind>) -</gray> <state> <gray>-</gray> <ingredients>"
+    state:
+      known: "<green>known</green>"
+      unknown: "<aqua>undiscovered</aqua>"
+      disabled: "<dark_red>disabled</dark_red>"
+  cast:
+    usage: '<red>Usage: /ritual cast \<key> - hold every reagent, then cast.</red>'
+    unknown: "<red>No ritual named '<key>' exists.</red>"
+    disabled: "<red>That ritual is disabled on this server.</red>"
+    wrong-kind: "<red>That ritual is a <kind> ritual - use /ritual track or /ritual mask.</red>"
+    missing: "<red>You lack the reagents: <missing>.</red>"
+    ok: "<green>The ritual commits - knowledge of '<key>' settles into your mind.</green>"
+    already-known: "<yellow>The ritual commits, but you already knew '<key>' - the reagents are spent.</yellow>"
+    removed-mid-cast: "<red>Your inventory changed mid-ritual - the reservation was released and nothing was consumed. The removed items are at your feet.</red>"
+  track:
+    usage: '<red>Usage: /ritual track \<key> \<player> - hold every reagent, then cast.</red>'
+    wrong-kind: "<red>That ritual is not a TRACKING ritual.</red>"
+    unknown-target: "<red>No known player by that name - tracking never resolves guesses.</red>"
+    ok: "<green>The ritual commits - you feel a <precision>-tier pull toward <target> for <minutes> minutes.</green>"
+    failed: "<yellow>The ritual commits but the strands slip - reagents spent, cooldown bought, no signal this time.</yellow>"
+  mask:
+    usage: '<red>Usage: /ritual mask \<key> - hold every reagent, then cast.</red>'
+    wrong-kind: "<red>That ritual is not a COUNTER_MASK ritual.</red>"
+    ok: "<green>The ritual commits - tracking against you reads one tier coarser for <minutes> minutes.</green>"
+  refused:
+    rate-limited: "<red>The spirits are weary of you - at most <attempts> attempt(s) per <window>s.</red>"
+    cooldown: "<red>That ritual is on cooldown for <seconds>s.</red>"
+    reservation-held: "<red>An unfinished reservation is already open - /ritual release clears it.</red>"
+    session-cap: "<red>You already hold the maximum active tracking session(s) - the reservation was released and the reagents are refundable.</red>"
+  release:
+    ok: "<green>Your open reservation was released - nothing was consumed.</green>"
+    noop: "<gray>You hold no open reservation.</gray>"
+  status:
+    header: "<gray>Your ritual state:</gray>"
+    sessions-none: "<gray>No active tracking sessions.</gray>"
+    sessions-line: "<gray>• tracking</gray> <white><target></white> <gray>(<precision> tier, <minutes> min left)</gray>"
+    effects-none: "<gray>No active effects.</gray>"
+    effects-line: "<gray>•</gray> <aqua>masking</aqua> <gray>active for <minutes> min (from <caster>)</gray>"
+    claims-none: "<gray>No open reservations.</gray>"
+    claims-line: "<yellow>• open reservation on '<key>' - /ritual release to clear it.</yellow>"
+    discoveries-none: "<gray>No discoveries recorded yet.</gray>"
+    discoveries-line: "<gray>Discoveries:</gray> <white><count></white> <gray>(latest: <latest>)</gray>"
+  signal:
+    none: "<gray>No active tracking sessions to pulse.</gray>"
+    header: "<gray>Tracking pulse:</gray>"
+    masked: "<gray>•</gray> <target> <gray>-</gray> <dark_red>the trail is masked; nothing resolves.</dark_red>"
+    offline: "<gray>•</gray> <target> <gray>-</gray> <dark_gray>beyond sensing (not in this world right now)</dark_gray>"
+    line: "<gray>•</gray> <target> <gray>is</gray> <direction> <gray>-</gray> <range>"
+    range:
+      close: "nearby"
+      mid: "a moderate pull away"
+      far: "far away"
+      beyond: "impossibly far"
+
+soul:
+  interact:
+    ok: "<green>The soul's gratitude settles into you - discovery '<key>' recorded.</green>"
+    already: "<gray>Another soul-sight already claimed this one's thanks.</gray>"
+    not-active: "<gray>This soul has nothing more to give.</gray>"
+
+admin:
+  usage: '<gray>Usage: /rpgadmin \<events \<player>|revoke \<sessionId> [reason]></gray>'
+  events-header: "<gray>Ritual events for <player> (<count> most recent):</gray>"
+  events-line: "<gray>•</gray> <white><action></white> <gray>-</gray> <detail> <gray>[<outcome>]</gray>"
+  events-none: "<gray>No ritual events recorded for that player.</gray>"
+  player-unknown: "<red>No known player by that name.</red>"
+  revoke:
+    usage: '<red>Usage: /rpgadmin revoke \<sessionId> [reason]</red>'
+    ok: "<green>Session <sessionId> revoked (<reason>).</green>"
+    noop: "<gray>That session was already resolved - nothing changed.</gray>"
+    not-found: "<red>No tracking session with that id.</red>"

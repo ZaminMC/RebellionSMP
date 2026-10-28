@@ -35,12 +35,17 @@ FILL="https://fill.papermc.io/v3/projects/paper/versions/$MC_VERSION/builds/$PAP
 command -v "$JAVA_BIN" >/dev/null || { echo "java not found (set JAVA_BIN)" >&2; exit 2; }
 
 # The module jars that ship plugin.yml, in install order (master prompt §17).
+# Updated with each new installable module: dragons (session 10),
+# artifacts (session 11), rpg (session 12/14 — ADR-0017 controller slice).
 MODULE_DIRS=(
   "rebellion-api/build/libs"
   "rebellion-core/build/libs"
   "rebellion-items/build/libs"
   "rebellion-teams/build/libs"
   "rebellion-wards/build/libs"
+  "rebellion-dragons/build/libs"
+  "rebellion-artifacts/build/libs"
+  "rebellion-rpg/build/libs"
 )
 
 case "${1:-}" in

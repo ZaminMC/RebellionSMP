@@ -1,0 +1,92 @@
+# RebellionRPG configuration.
+#
+# Loaded and validated by net.zaminmc.rebellion.rpg.RpgConfig (definition
+# families, tested in RpgConfigTest) plus the controller section
+# (net.zaminmc.rebellion.rpg.controller.RpgControllerConfig). Invalid values
+# are loud load errors: the module refuses to enable and Core reports the
+# exact keys - nothing is silently stretched behind the operator's back.
+#
+# The shipped definitions mirror RpgConfig.defaults() exactly (pinned by
+# RpgConfigTest.defaultsMatchTheShippedFile): one tracking ritual, one
+# counter-ritual mask, one knowledge ritual, and one encounter definition
+# that stays DISABLED until its spawn rules are calibrated for this
+# server's worlds (spawn rules are operator-owned world data).
+
+rpg:
+  rituals:
+    tracking:
+      enabled: true
+      kind: TRACKING
+      ingredients:
+        - {material: ECHO_SHARD, amount: 4}
+        - {material: DIAMOND, amount: 2}
+      cooldown-seconds: 3600
+      rate-limit: {attempts: 3, window-seconds: 21600}
+      duration-seconds: 1800
+      precision: REGION
+      failure-chance: 0.25
+      max-sessions: 1
+    mask:
+      enabled: true
+      kind: COUNTER_MASK
+      ingredients:
+        - {material: AMETHYST_SHARD, amount: 2}
+      cooldown-seconds: 7200
+      rate-limit: {attempts: 2, window-seconds: 21600}
+      duration-seconds: 3600
+      precision: REGION
+      failure-chance: 0.0
+      max-sessions: 1
+    soul_lore:
+      enabled: true
+      kind: KNOWLEDGE
+      ingredients:
+        - {material: BOOK, amount: 1}
+        - {material: LAPIS_LAZULI, amount: 8}
+      cooldown-seconds: 86400
+      rate-limit: {attempts: 1, window-seconds: 86400}
+      duration-seconds: 30
+      precision: REGION
+      failure-chance: 0.0
+      max-sessions: 1
+      knowledge-key: ritual_soul_communion
+
+  encounters:
+    wandering_soul:
+      # DISABLED until the operator calibrates the spawn rules for this
+      # server's worlds - a soul spawner that runs on uncalibrated world
+      # data is exactly the "random unchecked entity spawning" the master
+      # prompt forbids. Worlds must list real world names.
+      enabled: false
+      soul-entity: ALLAY
+      worlds: [world]
+      biomes: []
+      time-window: NIGHT
+      min-players: 1
+      max-players: 0
+      max-concurrent: 1
+      cooldown-seconds: 86400
+      ttl-seconds: 1800
+      rewards: [ritual_soul_communion]
+
+  controller:
+    # How often the soul spawner evaluates enabled encounter definitions
+    # (seconds). Each cycle spawns AT MOST one soul per encounter key.
+    spawn-interval-seconds: 300
+    # Horizontal offset range (blocks) around the chosen anchor player
+    # where a soul's spawn site is drawn.
+    spawn-radius-blocks: 64
+    # How often active tracking sessions pulse their signal to an online
+    # caster (seconds; 0 = pulse disabled - /ritual signal still renders
+    # on demand).
+    signal-interval-seconds: 60
+    # Reconciliation cadence: stale-claim release, encounter TTL expiry,
+    # soul-entity cleanup.
+    sweep-interval-seconds: 60
+    # A RESERVED ritual claim older than this is auto-released by the
+    # sweep (crash recovery; the digest row stays as refund evidence).
+    reservation-stale-seconds: 120
+    # Ascending block-distance edges for REGION signal wording ("close",
+    # "afar"...): the message catalog carries the labels, this carries
+    # the numbers. Strictly ascending, 1..100000 each, at most 8.
+    distance-buckets: [256, 1024, 4096]

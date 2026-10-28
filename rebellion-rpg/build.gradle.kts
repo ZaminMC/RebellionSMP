@@ -1,14 +1,16 @@
 /*
  * RebellionRPG — Phase 7. Rare souls, discoveries, rituals and tracking.
- * The serverless persistence layer (ADR-0016): the reserved ritual claim
- * protocol (reserve -> inventory -> all-or-none commit; stale reservations
+ * The persistence layer (ADR-0016): the reserved ritual claim protocol
+ * (reserve -> inventory -> all-or-none commit; stale reservations
  * released by sweep with refund evidence), the PK-idempotent discovery
  * ledger, precision-stamped tracking sessions with mask degradation and
  * derived expiry, time-bounded counter-ritual effects, the encounter
  * ledger (concurrency cap + cooldown + TTL + one-winner rewards), and the
- * append-only event audit. No plugin descriptor in this slice — the
- * controller phase (souls, inventory, signals, commands) rides this
- * contract.
+ * append-only event audit. The controller slice (ADR-0017) rides that
+ * contract: soul spawner + protection/interaction listener, the /ritual
+ * claim-protocol driver, REGION signal rendering, /rpgadmin audit, the
+ * join-loaded discovery placeholder cache and the reconciliation sweep
+ * — RebellionRPG is the eighth installable plugin.
  */
 plugins {
     `java-library`
@@ -47,5 +49,15 @@ tasks.test {
         events("failed", "skipped")
         showStackTraces = true
         showExceptions = true
+    }
+}
+
+// Expand ${version} in plugin.yml (the session-10 boot-smoke lesson: an
+// unexpanded placeholder ships a broken descriptor that Paper refuses).
+tasks.processResources {
+    val version = project.version.toString()
+    inputs.property("version", version)
+    filesMatching("plugin.yml") {
+        expand("version" to version)
     }
 }

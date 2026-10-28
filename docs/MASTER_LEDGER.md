@@ -91,6 +91,22 @@ its owning module has tests passing in `./gradlew test`.
 | Encounter ledger (cap/cooldown/TTL/one-winner rewards) | rebellion-rpg | tested | all rules answered from rows; admin despawn as the unwedge path; rewards ride the completion CAS |
 | Ritual/encounter definition config with collect-all validation | rebellion-rpg | tested | RpgConfigTest pins YAML<->defaults; disabled-by-default encounter (operator calibrates spawn rules) |
 | Module joins the build (serverless, no plugin.yml) | rebellion-rpg | tested | ADR-0009/0013 precedent; release pipeline builds + tests it, reports "not yet installable" |
+## RPG controller slice (rebellion-rpg, ADR-0017) — the eighth installable plugin
+
+| Feature | Module | Status | Notes |
+|---|---|---|---|
+| RpgPlugin wiring + descriptor (8th installable jar) | rebellion-rpg | verified-on-Paper-26.3 | plugin.yml + config.yml (definitions + optional controller section) + messages.yml (ADR-0012, pinned by RpgMessagesTest); ${version} expanded via processResources (session-10 lesson); boot smoke: all eight jars in order, rpg operational, console player-only guard, 3+ sweep cycles zero exceptions, graceful shutdown |
+| Soul spawner on pure SpawnRules verdicts | rebellion-rpg | implemented (born quiet) | one cycle per spawn-interval, at most one begin per enabled key; anchor-selected site in loaded surroundings, biome re-checked at the drawn column; ledger CAS is the only begin authority (cap/cooldown/worldlist); spawned souls persistent + faraway-kept + aware-off; shipped wandering_soul stays DISABLED until the operator calibrates world data |
+| Soul protection + one-winner completion | rebellion-rpg | implemented | damage cancelled for live souls (entity->encounter map, no world scan); right-click completes through the one-winner CAS; vanished entities (non-UNLOAD) despawn their row (E7 lesson); TTL expiry + entity cleanup ride the sweep |
+| /ritual claim-protocol driver | rebellion-rpg | implemented | verify -> reserve -> remove -> commit, all kinds (cast/track/mask) + status/signal/release; leftover-map race detector releases + refunds; known-UUID-only target resolution (online exact, then getOfflinePlayerIfCached); digest rows are refund evidence |
+| REGION signal rendering | rebellion-rpg | implemented | resolveTracking (the only sanctioned read) -> compass8 + bucket labels via SignalMath; effective tier after mask degradation; offline targets render "beyond sensing"; pulse task + on-demand /ritual signal |
+| /rpgadmin audit + recovery | rebellion-rpg | implemented | events <player> (last 10 audit rows), revoke <sessionId> [reason] (idempotent audited CAS); nothing mints state |
+| %rebellion_ritual_<key>_discovered% | rebellion-rpg | implemented | join-loaded discovery cache (load on join, evict on quit, refreshed by grant paths); resolution is a pure in-memory read (PlaceholderContributor contract) |
+| Reconciliation sweep | rebellion-rpg | implemented | stale-claim release, encounter TTL expiry, soul-entity cleanup; runs every sweep-interval + once at disable; per-row fault isolation (session-12 sweep-NPE lesson) |
+
+Player-level flows (reagent feel, signal pulse timing, live spawner on a
+calibrated map) remain interactive — honestly unclaimed until a player
+exercises them.
 
 ## Roadmap (from master prompt §18)
 

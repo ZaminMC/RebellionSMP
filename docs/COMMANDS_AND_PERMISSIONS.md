@@ -282,3 +282,42 @@ service-enforced), `rebellion.artifacts.admin` (default op).
 
 Privacy: the protected-origin coordinates are never exposed through
 placeholders; all reads are in-memory mirror reads.
+
+## RebellionRPG (Phase 7, controller slice — ADR-0017)
+
+All player feedback renders through the module's `messages.yml` catalog
+(ADR-0012). Authority never comes from client input: reagent checks are
+server-side pure math over storage contents, targets resolve to known
+UUIDs only (online exact match, then the non-blocking cached lookup —
+tracking never guesses), and every mutation rides the ADR-0016 ledger
+CASes.
+
+### `/ritual` — player-facing casting surface (permission `rebellion.rpg.use`, default true)
+
+| Subcommand | Behavior | Enforced by |
+|---|---|---|
+| `list` | Every ritual definition with kind, known/undiscovered/disabled state and its reagent list | viewer's discovery read |
+| `cast <key>` | KNOWLEDGE rituals: verify reagents → reserve the claim (digest = refund evidence) → remove reagents (leftover = race detector, releases + refunds) → all-or-none commit; already-known keys still spend the claim (typed) | reserve/commit CASes |
+| `track <key> <player>` | TRACKING rituals: same claim protocol; target must be a known UUID (online or cached offline — never a guess); a failed roll spends the claim and writes no session | resolveTracking ceiling + commit CAS |
+| `mask <key>` | COUNTER_MASK rituals on the caster: masks degrade incoming tracking one tier, never stack | effect rows + commit CAS |
+| `status` | Active sessions (effective precision + minutes left), active effects, open reservations, discovery count | per-viewer reads |
+| `signal` | On-demand pulse of the viewer's active sessions (compass + bucketed range, effective tier only; masked = nothing resolves; offline target = "beyond sensing") | resolveTracking (the only sanctioned read) |
+| `release` | Releases the viewer's open RESERVED claim (nothing was consumed) | release CAS |
+
+Console is denied the whole `/ritual` family (player-only by design —
+verified in the boot smoke).
+
+### `/rpgadmin` — audit + recovery (permission `rebellion.rpg.admin`, default op)
+
+| Subcommand | Behavior |
+|---|---|
+| `events <player>` | The 10 most recent audit rows for a player (claim releases, ritual commits with outcomes, encounter completions, session revocations) |
+| `revoke <sessionId> [reason]` | Revokes a tracking session (idempotent, audited); the unwedge path for live tracking state |
+
+Nothing in the admin family mints discoveries, sessions or effects.
+
+### PlaceholderAPI placeholders (expansion `rebellion`) — rpg
+
+| Placeholder | Value |
+|---|---|
+| `%rebellion_ritual_<key>_discovered%` | `true`/`false` — has the viewer discovered knowledge key `<key>`; resolves from the join-loaded in-memory cache (never a database read per request) |
