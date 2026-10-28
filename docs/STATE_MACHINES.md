@@ -384,3 +384,64 @@ the audit event `xp:<player>:<source>` is inserted *before* any mutation
 pre/post reads bracket the accumulate so the event outcome column records
 LEVEL_UP with the honest `from→to` pair — all in one transaction, so a
 crash can never double-award or leave an un-gated mutation.
+
+## Prison sentence lifecycle (implemented: rebellion-prison PrisonService, ADR-0021)
+
+One state machine per sentence row (`rb_prison_sentences.state`), with the
+portable partial-unique emulation: `live_guard` carries the player UUID
+while live and is nulled on release, so `UNIQUE (live_guard)` enforces
+exactly one live sentence per player while released history survives.
+Deaths are the only entry point; a death while a sentence is live still
+scores and scars but can never book a second sentence (the constraint
+answers, not application discipline).
+
+```
+ applyDeath (tx: event gate + death row + score/scar + routing)
+   (nothing) ──► PENDING ──┬── confirmJailed (CAS, teleport landed) ──► JAILED ──┬── payRelease commit (CAS, same tx as fee PAID) ──► RELEASED(PAID)
+                          │                                                    ├── markReleased ESCAPE/RESCUE/ADMIN_OVERRIDE (CAS + fee VOID) ──► RELEASED
+                          └── revertPending (CAS, staff actor mandatory) ──► RELEASED(ADMIN_OVERRIDE)
+```
+
+| From | Event | To | Guard (all inside one transaction) | Idempotency |
+|---|---|---|---|---|
+| — | `applyDeath` | PENDING | event-key gate + routing verdict (ALWAYS/NEVER/SCORE_THRESHOLD) + live-guard slot free | replayed death key → `DEATH_NOOP` carrying the live profile; live sentence held → `SENTENCE_EXISTS` (score/scar still applied) |
+| PENDING | `confirmJailed` | JAILED | CAS `state='PENDING'` after the controller's teleport landed | re-confirm → `JAILED_NOOP`; nothing live → `NO_SENTENCE` |
+| PENDING | `revertPending` | RELEASED(ADMIN_OVERRIDE) | CAS + non-null staff actor + audit + fee VOID | non-PENDING → `NO_SENTENCE`/`NOT_IN_STATE`; anonymous → `ADMIN_ACTOR_REQUIRED` |
+| PENDING\|JAILED | `markReleased` ESCAPE/RESCUE/ADMIN_OVERRIDE | RELEASED | CAS + actor mandatory for overrides + quote VOID + audit | concurrent release → `RELEASE_NOOP`; `PAID` reason refused (`ARGUMENT_INVALID`) |
+| JAILED | `payRelease` | RELEASED(PAID) | fee row find-or-freeze + provider debit + CAS pair (fee PAID + sentence RELEASED) in one tx | see the fee claim machine below |
+
+## Prison fee claim lifecycle (implemented: rebellion-prison PrisonService, ADR-0021)
+
+The fee row is the §5.9 audit AND the claim of the pay protocol. The
+quote is computed once (pure `FeeMath`: score × factor × multiplier in
+BigDecimal, explicit rounding, clamp-before-conversion) and frozen — a
+retry never recomputes, so a death in prison between quote and payment
+cannot inflate a half-paid release.
+
+```
+ payRelease
+   JAILED sentence ──(find-or-freeze)──► QUOTED ──┬── provider debit ok ──(one tx: CAS fee PAID + CAS sentence RELEASED(PAID) + audit) ──► PAID
+                                                  └── INSUFFICIENT_FUNDS ──► stays QUOTED (reusable, frozen)
+   sentence released by another route ──► QUOTED ──(CAS)──► VOID
+```
+
+| From | Event | To | Guard | Idempotency |
+|---|---|---|---|---|
+| — | quote (inside `payRelease`) | QUOTED | `UNIQUE (sentence_id)`: exactly one quote per sentence | existing QUOTED is re-used frozen; existing PAID → `PAID_NOOP` |
+| QUOTED | provider debit `prison-fee:<feeId>` + commit | PAID | debit success (fresh or replay) + CAS pair in one all-or-none tx, stamping provider id + ledger entry | crash after debit before commit: retry's debit is the typed no-op carrying the original entry id; money moved exactly once |
+| QUOTED | `markReleased` by another route | VOID | CAS + audit | re-void → no-op; the frozen amount is never refunded implicitly (the provider charge only happens under a committed debit key) |
+
+## Rehabilitation + scar ledger (implemented: rebellion-prison PrisonService, ADR-0021)
+
+Deaths clamp scars to the configured active-penalty ceiling (max-health
+− floor) inside single-statement CASE updates; the deaths table keeps
+the full forensic history. Rehabilitation is idempotent per
+`(player, task, completionKey)`; occurrences are counted from rows and
+capped per task; healing is `min(task heal, scar − restored)` applied
+through the clamped restoration — double healing and over-healing are
+impossible by structure, not by discipline.
+
+```
+ death: scar_points = min(scar + penalty, ceiling)      rehab: restored_points = min(restored + heal, scar_points)
+ active penalty (derived, never stored) = min(scar − restored, ceiling)
+```

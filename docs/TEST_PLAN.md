@@ -420,3 +420,64 @@ wards 86, dragons 57, artifacts 53 — up from 32 by 8 config, 4 messages,
   player-level flows. The controller phase (bags, brewing-stand wiring,
   live triggers, commands, placeholders) will gate on the interactive
   pass like every module before it.
+
+## Phase 9 persistence groundwork (rebellion-economy + rebellion-prison, ADR-0021 — serverless, session 18)
+
+- [x] `EconomyServiceIT` (real SQLite through Core's actual DatabaseService):
+  credit/debit idempotency per key (replays resolve to `NOOP_DUPLICATE`
+  carrying the original entry id; balance untouched), fresh-key charging,
+  the refusal families traceless by direct SQL count (INSUFFICIENT_FUNDS
+  leaves no ledger row; BOUNDS_EXCEEDED under a tight configured maximum;
+  negative/zero/oversized amounts never flip into credits — the sign
+  bug this suite was written to catch), key/reason grammar validation,
+  the ledger-reconstructs-balance audit walk (`Σ delta == balance`, every
+  row pins `balance_after`; distinct clock ticks so "newest" is never
+  ambiguous), the concurrent first-credit insert-vs-accumulate race, and
+  the restart round-trip (replays still resolve after a fresh boot).
+- [x] `EconomyConfigTest`: defaults, minimal documents, silent
+  section-missing fallback, collected invalid bounds (name/symbol/scale/
+  max-balance), the 2^62 overflow-safe ceiling, and the key/reason
+  grammars.
+- [x] `PrisonServiceIT` (real SQLite; the **real** rebellion-economy
+  service injected as the EconomyProvider — the cross-module fee contract
+  is proven over both modules' actual persistence): death idempotency
+  (replay → `DEATH_NOOP`; keys namespaced per player), score growing
+  forever while scars clamp at the ceiling, all three routing policies,
+  death-in-prison scoring without a second sentence (the live-guard
+  constraint), confirm-JAILED idempotency, revertPending staff-actor
+  enforcement + audit, released history surviving while the live slot
+  frees, the full fee protocol (paid release debits exactly the formula
+  amount with provider + entry stamped; INSUFFICIENT_FUNDS keeps the
+  frozen quote reusable — a death in prison between quote and retry
+  cannot inflate it; the crash-window reconciliation finishes the
+  commit through the debit no-op with the ORIGINAL entry id and the
+  money moved exactly once; post-release re-pay finds no sentence),
+  non-paid releases voiding quotes with debt intact, admin overrides
+  requiring the actor, `PAID` unable to bypass the protocol,
+  rehabilitation (idempotent completions, occurrence caps, clamped
+  healing, unknown/disabled tasks), and the restart round-trip with a
+  frozen quote still paying.
+- [x] `PrisonConfigTest`: defaults matching the §5.8 contract, a full
+  valid document, every invalid field collected (floor-vs-bar, route
+  vocabulary, factor scale/range, multiplier, rounding vocabulary,
+  fee-order, task key grammar, heal-vs-ceiling, occurrences, anchor
+  bounds, world-name grammar), the 2^62 max-fee limit.
+- [x] `FeeMathTest`: the product formula, explicit configurable rounding
+  (HALF_UP vs DOWN), exact fractional factors, clamp-before-conversion
+  (a ~9.2e28 raw product clamps to max without any long overflow), and
+  the shipped-default quotes.
+- Caught and fixed during the slice (test-first evidence): the debit
+  amount was validated after sign arithmetic, so a negative debit
+  flipped into a credit (`AMOUNT_INVALID` now happens on the caller's
+  value before any sign flip); the ledger audit test relied on identical
+  timestamps for its "newest entry" query (now distinct clock ticks —
+  ties made ordering ambiguous); the crash-window test funded the
+  account before the "failed" attempt (it paid — the sequence now
+  freezes the quote first); a config-doc test expected heal/occurrence
+  issues from a task whose KEY was itself invalid (the key rejection
+  skips the task — a second task carries the value issues).
+- Not yet applicable (no plugin surface): boot smoke (both modules ship
+  no descriptor — boot-smoke MODULE_DIRS stays at nine installable
+  jars), messages catalog, player-level flows. The controller phase
+  (death listener, prison structure, NPC guards, escape objectives,
+  commands, placeholders) will gate on the interactive pass.

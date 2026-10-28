@@ -668,3 +668,75 @@ against the pinned paper-api 26.3 jar: `PotionType` is a real enum;
 effect mapping stays controller-phase). Shipped defaults are conservative:
 one modest POWER unlock, one modest EFFICIENCY unlock, two bag tiers, and
 FALLING deliberately opt-in.
+
+## Economy module (rebellion-economy, Phase 9 groundwork — persistence layer only, ADR-0021)
+
+**Serverless** (no plugin descriptor — the sixth persistence-first slice;
+ADR-0009/0013/0016/0019 precedent). The small, explicit §5.9 economy: UUID
+accounts with exact long minor-unit balances and an append-only ledger
+whose `(account_uuid, idempotency_key)` uniqueness is the idempotency
+anchor. One mutation = one transaction pairing the account
+insert-or-accumulate with its ledger row carrying `balance_after` — a
+balance never moves without its durable audit entry. Refusals are typed
+and traceless (INSUFFICIENT_FUNDS, BOUNDS_EXCEEDED, AMOUNT_INVALID,
+ARGUMENT_INVALID — negative amounts can never flip into credits); the
+configured `max-balance` (≤ 2^62) plus the 2^40 single-mutation ceiling
+make every accumulate overflow-safe by construction. Deliberately no
+transfer/shop/faucet surface (§5.9 scope).
+
+**Cross-module contract**: implements the api-level
+`EconomyProvider` (`net.zaminmc.rebellion.api.economy`) — the shared
+provider §5.8/§5.9 demand. Prison binds to the interface only; a future
+optional Vault bridge would implement the same interface with its own
+`providerId()` for the fee audit. The interface javadoc binds every
+implementation to fail-closed, non-negative, non-hot-path semantics.
+
+**Authority**: `EconomyService` — the ledger-backed implementation.
+Replays resolve to the typed successful no-op carrying the original
+entry id and recorded balance, which is exactly what the prison fee
+protocol's crash reconciliation needs.
+
+## Prison module (rebellion-prison, Phase 9 groundwork — persistence layer only, ADR-0021)
+
+**Serverless** (no plugin descriptor). The §5.8 state contract: deaths
+apply exactly once (the death-key PK; replay → typed no-op) — score
+accumulate plus write-clamped health scars (never below the configured
+floor) plus routing into a durable PENDING sentence (ALWAYS by default /
+NEVER / SCORE_THRESHOLD). `UNIQUE (live_guard)` enforces exactly one live
+sentence per player while released history rows survive. PENDING is the
+`pending_imprisonment` retry state; `confirmJailed` CASes it into JAILED
+after the controller's teleport lands (idempotent).
+
+**Release routes**: paid (the fee claim protocol below), escape/rescue/
+recorded staff override (mandatory actor, quote voided, death score
+never cleared — overrides end sentences on the record, they never erase
+debt), and `revertPending` as the fail-closed recovery twin for stuck
+PENDING sentences.
+
+**The fee claim protocol** (§5.8 "very expensive paid release route",
+§5.9 transparency): `payRelease` is the one deliberately blocking
+orchestration (three stores in time; the javadoc pins the caller's
+thread duties). Find-or-freeze the QUOTED fee row — every §5.9
+structured value (score, factor, multiplier, rounding, clamp, amount)
+frozen once by the pure `FeeMath` (BigDecimal, clamp-before-conversion —
+the overflow answer) — then the provider debit under the idempotency key
+`prison-fee:<feeId>`, then one all-or-none transaction: fee QUOTED→PAID
+(stamping provider + ledger entry, the transaction id) together with
+sentence JAILED→RELEASED(PAID). Crash windows reconcile: after-debit
+crashes finish on the retry through the debit no-op carrying the
+original entry id — money moves exactly once; INSUFFICIENT_FUNDS keeps
+the frozen quote reusable.
+
+**Rehabilitation**: completions idempotent per
+`(player, task, completionKey)`; occurrence caps per task; healing
+clamped to the scar ledger — double healing impossible by structure.
+
+**Config**: `PrisonConfig` — four families: `death` (score, penalty
+points, hard floor, max-health reference, route, threshold — floor
+strictly below the bar), `release` (exact-decimal factor, multiplier,
+rounding mode, min/max clamps), `rehab.tasks` (heal bounded by the
+active-penalty ceiling, occurrence caps), `prison` (the jail anchor:
+validated world name + block coordinates + facing, stamped per sentence).
+Defaults ship the product contract: every death jails, one heart lost per
+death down to a 3-heart floor, fee = score × 1.00 × 5 HALF_UP, two rehab
+objectives.

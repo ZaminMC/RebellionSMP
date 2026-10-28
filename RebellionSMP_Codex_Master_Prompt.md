@@ -564,6 +564,7 @@ Maintain a buildable state at every milestone. Do not implement all modules in o
 ### Phase 9 — Prison, death scores, economy interface, rehabilitation
 - Implement prison structure setup/generation, death-to-prison state, NPC guards, escape objectives, external rescue, payment formula, health scars, rehabilitation/recovery, missing-world fallback, and staff recovery commands.
 - Test the prison/world on a copy and prove it cannot overwrite existing builds during setup.
+- STATE (session 18, ADR-0021): persistence groundwork delivered and tested (606/0) — rebellion-economy (the §5.9 ledger: exact minor-unit accounts + append-only idempotent audit, shared api-level EconomyProvider) + rebellion-prison (deaths apply once with write-clamped scars and a hard floor; durable PENDING sentence with a structural one-live-sentence guard; the frozen-fee release protocol with crash reconciliation over the shared provider; audited non-paid releases that never clear debt; idempotent clamped rehabilitation). Remaining for this phase: the controller slice — death listener, prison structure setup/generation + the copy-test/overwrite proof, NPC guards, escape objectives, external rescue mechanics, teleports, /prison + staff commands, placeholders, menus, missing-world fail-closed wiring, optional Vault bridge.
 
 ### Phase 10 — Cosmetic-only rewards and optional integrations
 - Implement cosmetic unlock/entitlement records, visual-only cosmetic effects, probability levels and performance bounds.

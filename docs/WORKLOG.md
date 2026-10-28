@@ -1622,3 +1622,84 @@ future scope (recorded in the ADR + ledger). Next implementable slice:
 Phase 9 (prison/death-score/economy persistence groundwork), or the
 operator-side passes (wandering_soul calibration, dragons ride-feel
 report).
+
+## Session 18 (2026-10-28) — Phase 9 persistence groundwork: economy + prison (ADR-0021)
+
+**Task.** The Phase 9 groundwork move, the persistence-first pattern a
+sixth time (ADR-0009/0013/0016/0019 precedent): make the §5.9 economy
+and the §5.8 prison state real as two serverless modules, and prove the
+cross-module fee contract over both modules' actual persistence.
+
+**Research-first notes.** No new live-API surface was needed — this
+slice is pure state. The two deliberate design research points, both
+resolved from the pinned toolchain rather than assumed: (1) scalar
+`MIN`/`LEAST` differ between SQLite and MySQL, so every write clamp is a
+portable `CASE` expression; (2) partial unique indexes are not portable,
+so the one-live-sentence-per-player invariant rides the
+`live_guard NULL` emulation (`UNIQUE` over a nullable column allows
+unlimited released history rows).
+
+**Implemented.**
+
+- `rebellion-api`: `EconomyProvider` + `EconomyResult`/`EconomyOutcome`
+  — the shared provider §5.8/§5.9 demand, in the same API layer as
+  `TeamAffiliationService`/`MapMarkerProvider`. Exact long minor units,
+  atomic + idempotent per (account, idempotency key), fail-closed,
+  never a hot-path call; prison binds to the interface only.
+- `rebellion-economy` (serverless): two tables under module key
+  `economy` — accounts (guarded accumulate, configured max-balance ≤ 2^62
+  with a 2^40 single-mutation ceiling: the §5.9 overflow answer) and the
+  append-only ledger whose `(account, key)` uniqueness is the
+  idempotency anchor: replays resolve to the typed no-op carrying the
+  original entry id. One mutation = one all-or-none transaction pairing
+  balance change with audit row. Deliberately no transfer/shop/faucet.
+- `rebellion-prison` (serverless): six tables under module key `prison`
+  — profiles (score accumulate + write-clamped scars, active penalty
+  derived), deaths (the apply-once PK, namespaced per player),
+  sentences (PENDING→JAILED→RELEASED CAS with the live_guard
+  structural one-live-sentence guard and the config-stamped jail
+  anchor), fees (the frozen §5.9 audit as the pay-protocol claim:
+  QUOTED→PAID|VOID), rehab (structurally idempotent completions),
+  events (append-only audit). `payRelease` is the one blocking
+  orchestration — find-or-freeze the quote (pure `FeeMath`: BigDecimal,
+  explicit rounding, clamp-before-conversion), provider debit under
+  `prison-fee:<feeId>`, then one all-or-none commit CASing the fee
+  (provider + ledger entry stamped) together with the sentence release.
+  Every crash window reconciles; INSUFFICIENT_FUNDS keeps the frozen
+  quote reusable. Non-paid releases void quotes, record the mandatory
+  staff actor for overrides, and never clear death scores.
+- `settings.gradle.kts`: the two new modules join the build; boot-smoke
+  MODULE_DIRS intentionally untouched (both modules ship no jar to
+  install — nine installable plugins).
+
+**Evidence.** Full clean suite **606 tests / 0 failures** (54 new:
+11 economy IT + 6 economy config + 21 prison IT + 10 prison config +
+6 fee math), counted from the result XMLs after `gradlew clean test`.
+`PrisonServiceIT` runs against real SQLite through Core's actual
+DatabaseService with the REAL economy service injected as the provider —
+the crash-window test proves the reconciliation end-to-end (the retry's
+debit is the typed no-op carrying the original entry id; money moved
+exactly once).
+
+**Test-first catches worth recording.** The economy suite caught a
+genuine sign-arithmetic bug: `debit(-5)` validated `abs(-5)` and
+flipped into a CREDIT — amounts now validate on the caller's value
+before any sign flip. Also caught by the suite: identical test-clock
+timestamps made the ledger's "newest entry" query ambiguous (distinct
+ticks now); the crash test originally funded the account before the
+"failed" attempt (it paid — the sequence now freezes the quote first).
+
+**Docs.** ADR-0021; DATA_MODEL (both schemas with their structural
+guarantees); STATE_MACHINES (sentence lifecycle, fee claim lifecycle,
+scar/rehab ledger); ARCHITECTURE (two new module sections);
+TEST_PLAN (the five suites + the catches); MASTER_LEDGER (the Phase 9
+feature table + roadmap row 9); README (the two serverless rows).
+
+**Honest scope.** No gameplay is claimed verified: the controller phase
+owns the death listener (what a "valid player death" is, where deathKeys
+come from), respawn/join retry wiring, prison structure generation,
+NPC guards, escape objectives, teleports + confirmJailed wiring,
+max-health attribute application, /prison commands, placeholders, menus,
+and any Vault bridge. Next implementable slice: the Phase 9 controller,
+or the operator-side passes (wandering_soul calibration, dragons
+ride-feel report).

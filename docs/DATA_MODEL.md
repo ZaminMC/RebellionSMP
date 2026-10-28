@@ -456,3 +456,92 @@ transaction), `claim:<uuid>:commit`, `claim:<uuid>:release`,
 `player_uuid CHAR(36) NULL`, `type`, `detail`, `outcome` (the durable
 commit outcome — what re-delivery reads back), `at_utc`. Idempotent by
 construction; written inside the mutation's transaction.
+
+## Economy module (module key `economy`, migration v1 — ADR-0021)
+
+Two tables over exact long minor units; every mutation is one transaction
+pairing the account change with its append-only ledger row (a balance
+never moves without its audit entry). Idempotency is structural:
+`UNIQUE (account_uuid, idempotency_key)`.
+
+### rb_economy_accounts — the balance rows
+
+`PRIMARY KEY (account_uuid)` — one row per account, created lazily on
+first mutation. `balance BIGINT` minor units, `updated_utc`. Balances
+mutate only through guarded accumulates inside the mutation
+transactions; the invariants (never negative, never above the
+configured `max-balance`, validated ≤ 2^62 with a 2^40 single-mutation
+ceiling) are checked before the write — the §5.9 overflow answer.
+
+### rb_economy_ledger — the append-only idempotent audit
+
+`PRIMARY KEY (entry_id CHAR(36))`, `UNIQUE (account_uuid,
+idempotency_key VARCHAR(96))`. Columns: `reason VARCHAR(64)` (caller's
+grammar-checked audit reason, e.g. `prison.release-fee`), `delta BIGINT`
+(signed), `balance_after BIGINT` (the exact post-mutation balance — any
+account's history can be reconstructed and audited from the ledger
+alone), `created_utc`. A replayed key loses the constraint and resolves
+to the typed successful no-op carrying the original entry id — crash
+reconciliation without a second charge.
+
+## Prison module (module key `prison`, migration v1 — ADR-0021)
+
+Six tables. The §5.8 death contract ("apply once"), the sentence
+lifecycle with a structural one-live-sentence guard, the §5.9 fee audit
+as a frozen claim row, and idempotent clamped rehabilitation.
+
+### rb_prison_profiles — the death-score and scar ledgers
+
+`PRIMARY KEY (player_uuid)`. `death_score BIGINT` (accumulates
+forever), `scar_points INT`, `restored_points INT` (both write-clamped
+inside single-statement CASE updates: scars never exceed the configured
+active-penalty ceiling; restoration never exceeds scars),
+`updated_utc`. The active health penalty is derived (never stored):
+`min(scar − restored, ceiling)`.
+
+### rb_prison_deaths — the "apply once" anchor
+
+`PRIMARY KEY (death_key VARCHAR(96))`, stored namespaced as
+`player:key` so controller-composed keys never collide across players.
+Columns: `score_delta`, `health_penalty`, `created_utc`. Death+respawn
+double-fire and relog re-delivery lose the PK and resolve to the typed
+no-op — health is never deducted twice.
+
+### rb_prison_sentences — the lifecycle with the live guard
+
+`PRIMARY KEY (sentence_id)`, `UNIQUE (live_guard)` — the portable
+partial-unique emulation: `live_guard` carries the player UUID while
+the sentence is PENDING/JAILED, NULL after release, so exactly one live
+sentence can exist per player while released history rows survive
+forever. States: `PENDING` (the durable `pending_imprisonment` retry
+state) → `JAILED` (teleport confirmed) → `RELEASED` (+ `release_reason`
+∈ PAID/ESCAPE/RESCUE/ADMIN_OVERRIDE), all compare-and-set. The jail
+anchor (`jail_world`, `jail_x/y/z`, `jail_yaw/pitch` — integers all the
+way down) is stamped from config at creation and never rewritten.
+
+### rb_prison_fees — the frozen §5.9 audit and pay-protocol claim
+
+`PRIMARY KEY (fee_id)`, `UNIQUE (sentence_id)` (one quote per sentence).
+Columns carry every §5.9 structured value: `death_score`,
+`inflation_factor` (exact decimal string), `multiplier`, `rounding`,
+`clamp`, `amount_minor`, then `provider` + `ledger_entry CHAR(36)`
+(the economy transaction id) stamped at payment, `quoted_utc`,
+`resolved_utc`. States `QUOTED → PAID | VOID`, all CAS. The quote is
+frozen at first computation and re-used across retries — it can never
+drift for a half-paid release.
+
+### rb_prison_rehab — idempotent task completions
+
+`PRIMARY KEY (player_uuid, task_key, completion_key)` — structural
+idempotency per completion identity. Columns: `occurrence INT` (counted
+from rows, capped per task), `healed_points INT` (the clamped heal
+actually applied — never more than the remaining scars), `created_utc`.
+
+### rb_prison_events — append-only audit
+
+`PRIMARY KEY (event_key VARCHAR(160))` — deterministic fragments:
+`death:<player>:<key>` (the death idempotency gate, outcome finalized to
+APPLIED inside the transaction), `sentence:<uuid>:created|jailed|released`
+(release detail carries actor + note — staff overrides are never
+anonymous), `fee:<uuid>:quoted|paid|void`, `rehab:<player>:<task>:<key>`.
+Columns: `player_uuid`, `type`, `detail`, `outcome`, `at_utc`.

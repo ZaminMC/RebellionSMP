@@ -22,7 +22,15 @@ Early development on the `develop` branch. Currently implemented:
 | RebellionRPG | `RebellionRPG-<version>.jar` | rare souls, discoveries, rituals and tracking (ADR-0016/0017/0018): reserved ritual claims (reserve→inventory→all-or-none commit, stale sweep with refund evidence), PK-idempotent discovery ledger, precision-stamped tracking sessions with mask degradation and derived expiry, encounter ledger (cap/cooldown/TTL/one-winner rewards), soul spawner born quiet until world calibration, /ritual + /rpgadmin, %rebellion_ritual_<key>_discovered%, /ritualguide menu — 8th installable plugin, boot-verified on Paper 26.3; reagent/signal feel and wandering_soul calibration are interactive gates |
 | RebellionAlchemy | `RebellionAlchemy-<version>.jar` | brewing progression (ADR-0019/0020): derived brewing levels over an idempotent XP accumulate wired to brewing-stand loader stamps, POWER unlocks boosting drinks over the potion's own values, claim-protocol purchases with efficiency discounts, potion bags with PDC-carried contents + every inventory-safety guard (nesting ban, hopper/craft/furnace blocks, per-click persistence), player-defined auto-consumption rules under a strict operator policy with the periodic evaluator riding execution claims, /brewing + /alchemyadmin, %rebellion_brewing_level% family, stale-claim sweep — 9th installable plugin, boot-verified on Paper 26.3; drink-boost feel, bag UX and auto-consume timing are interactive gates |
 
-Further modules (prison, cosmetics) are planned —
+Serverless modules in active development (no plugin JAR yet — exercised
+through their tested services only, ADR-0021):
+
+| Module | State | Scope |
+|---|---|---|
+| RebellionEconomy | persistence layer, serverless | the small §5.9 economy: exact minor-unit UUID accounts + an append-only idempotent ledger implementing the shared api-level `EconomyProvider` contract (a future Vault bridge would implement the same interface) |
+| RebellionPrison | persistence layer, serverless | the §5.8 state contract: deaths apply once (score + write-clamped health scars + routing), a durable PENDING sentence with a structural one-live-sentence guard, the frozen-fee release protocol with crash reconciliation over the shared provider, audited staff overrides that never clear debt, idempotent clamped rehabilitation |
+
+Further modules (prison/economy controllers, cosmetics) are planned —
 see `docs/MASTER_LEDGER.md` for the phase roadmap and current status.
 
 ## Dev builds
