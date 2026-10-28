@@ -64,6 +64,11 @@ Read this file before editing anything in this repository.
 - Tests are plain JUnit 5 + real SQLite files (no Bukkit mocking of server
   statics). Core services take injected dependencies; keep it that way so the
   suite stays honest.
+- Boot-level Paper verification runs headlessly: `./scripts/boot-smoke.sh`
+  (ADR-0011; fetch → jars → start/send/stop). Run it after any
+  plugin-wiring, descriptor, packaging, or config-boot change. It is the
+  gate that caught the `YamlConfiguration.load(String)` path-vs-content
+  defect class — unit tests cannot see wiring bugs.
 
 ## Code style
 

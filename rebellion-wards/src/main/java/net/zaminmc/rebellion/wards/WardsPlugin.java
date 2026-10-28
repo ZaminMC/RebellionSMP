@@ -74,7 +74,10 @@ public final class WardsPlugin extends JavaPlugin {
                 saveResource("config.yml", false);
             }
             YamlConfiguration yaml = new YamlConfiguration();
-            yaml.load(Files.readString(configPath));
+            // loadFromString, NOT load(String): the String overload resolves a
+            // PATH, not YAML content (caught live on Paper 26.3 build 226,
+            // 2026-10-28 — teams had the identical defect).
+            yaml.loadFromString(Files.readString(configPath));
             var loaded = WardsConfig.loadResult(yaml);
             if (!loaded.valid()) {
                 loaded.issues().forEach(issue -> logger.severe("  " + issue));
@@ -177,7 +180,11 @@ public final class WardsPlugin extends JavaPlugin {
             sweepTask = null;
         }
         RebellionApi.find(ModuleRegistry.class)
-                .ifPresent(registry -> registry.update("wards", ModuleState.DISABLED, "shutdown"));
+                // A FAILED module keeps its failure reason; onDisable must not
+                // rewrite it to "shutdown" (module failure would be hidden).
+                .ifPresent(registry -> registry.health("wards")
+                        .filter(h -> h.state() != ModuleState.FAILED)
+                        .ifPresent(h -> registry.update("wards", ModuleState.DISABLED, "shutdown")));
         getServer().getServicesManager().unregisterAll(this);
         // Detection state is working memory; the database is the authority.
         service = null;

@@ -52,7 +52,10 @@ public final class TeamsPlugin extends JavaPlugin {
                 saveResource("config.yml", false);
             }
             YamlConfiguration yaml = new YamlConfiguration();
-            yaml.load(Files.readString(config));
+            // loadFromString, NOT load(String): the String overload resolves a
+            // PATH (FileNotFoundException with the content as the "path" —
+            // caught live on Paper 26.3 build 226, 2026-10-28).
+            yaml.loadFromString(Files.readString(config));
             var loaded = TeamsConfig.loadResult(yaml);
             if (!loaded.valid()) {
                 loaded.issues().forEach(issue -> logger.severe("  " + issue));
@@ -128,7 +131,12 @@ public final class TeamsPlugin extends JavaPlugin {
             service.cache().cachedPlayers().forEach(service::evict);
         }
         RebellionApi.find(ModuleRegistry.class)
-                .ifPresent(registry -> registry.update("teams", ModuleState.DISABLED, "shutdown"));
+                // A FAILED module keeps its failure reason: onDisable's
+                // DISABLED+"shutdown" would otherwise hide why it died
+                // (observed live: failed enables showed "disabled — shutdown").
+                .ifPresent(registry -> registry.health("teams")
+                        .filter(h -> h.state() != ModuleState.FAILED)
+                        .ifPresent(h -> registry.update("teams", ModuleState.DISABLED, "shutdown")));
         getServer().getServicesManager().unregisterAll(this);
         service = null;
         chat = null;

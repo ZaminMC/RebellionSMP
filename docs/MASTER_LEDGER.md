@@ -10,8 +10,9 @@ its owning module has tests passing in `./gradlew test`.
 |---|---|---|---|
 | Gradle multi-project build, wrapper, version catalog | root | tested | Java 25 toolchain, pinned deps, FAIL_ON_PROJECT_REPOS |
 | Release pipeline: numbered dev prereleases from develop (ADR-0010) | .github/workflows | tested | every develop push → `vX.Y.Z-dev.N` prerelease (never `latest`), JARs discovered by plugin.yml presence, writes authored as Abasing via ABASING_TOKEN; ci.yml keeps PRs + main |
-| Shared API contracts (database, module registry, results) | rebellion-api | tested | one runtime class identity via plugin `depend` |
-| Core lifecycle + bootstrap + fail-closed disable | rebellion-core | tested | BootstrapException path, unit-covered |
+| Paper 26.3 boot-smoke harness (ADR-0011) | scripts/boot-smoke.sh | tested | headless boot gate: fetch (checksum-verified) → jars → start/send/stop; caught 5 live defects on first run (fixed same session) |
+| Shared API contracts (database, module registry, results) | rebellion-api | verified-on-Paper-26.3 (boot) | loads + enables first; one runtime class identity via plugin `depend` |
+| Core lifecycle + bootstrap + fail-closed disable | rebellion-core | verified-on-Paper-26.3 (boot) | first-boot config generation, SQLite WAL pool, clean shutdown; BootstrapException path unit-covered; broken-config live path still manual |
 | Config loader framework (atomic reload, env expansion, issue aggregation) | rebellion-core | tested | ConfigLoaderTest, CoreConfigLoaderTest, DatabaseConfigLoaderTest |
 | Messages loader (bundled defaults, strict MiniMessage validation) | rebellion-core | tested | CoreMessagesTest; closed-tag contract |
 | Diagnostics (incident IDs, bounded ring, rotated sanitized reports) | rebellion-core | tested | DiagnosticsServiceTest |
@@ -19,15 +20,15 @@ its owning module has tests passing in `./gradlew test`.
 | HikariCP pool (shaded/relocated) + SQLite + MySQL config | rebellion-core | tested | SQLite integration-tested; MySQL path config-tested only |
 | Schema migrations (per-module registry, checksums, downgrade refusal) | rebellion-core | tested | MigrationRunnerTest |
 | Module health registry (ModuleRegistry impl) | rebellion-core | tested | ModuleManagerTest |
-| `/rebellion status\|modules\|diagnose\|reload` + tab completion | rebellion-core | implemented | command executor logic; server-level verification planned |
-| PlaceholderAPI expansion (`rebellion`, 4 core placeholders) | rebellion-core | implemented | loads only with PAPI present; runtime check pending |
+| `/rebellion status\|modules\|diagnose\|reload` + tab completion | rebellion-core | verified-on-Paper-26.3 (console) | status/modules/diagnose verified in the boot smoke; reload + player-side still planned |
+| PlaceholderAPI expansion (`rebellion`, 4 core placeholders) | rebellion-core | implemented | absent-PAPI path verified in the boot smoke (stays inactive); with-PAPI runtime check pending |
 | Rarity registry + material resolver (COMMON fallback, data-driven styles) | rebellion-items | tested | RarityLoaderTest; serverless via injected validator |
 | Versioned PDC item identity (fail-closed parsing, canonical UUIDs) | rebellion-items | tested | ItemIdentityTest; Bukkit adapter is thin |
 | Lore annotation (marker de-dup, metadata preservation, config-gated flows) | rebellion-items | tested | LorePlannerTest; stack-level behavior on Paper is a manual gate |
 | Talisman tier axis (NORMAL/ARTIFACT/RELIC, separate from rarity) | rebellion-items | tested | contract test |
 | DeluxeMenus-shaped menu engine (registry, validation, click safety) | rebellion-items | tested | MenuEngineTest; live-inventory interaction is a manual gate |
-| Bundled menus: item codex + talisman guide | rebellion-items | tested | parsed from disk in MenuEngineTest |
-| /rebellionitems inspect\|annotate\|reload\|status, /rebellionmenu <id> | rebellion-items | implemented | command logic; server-level verification planned |
+| Bundled menus: item codex + talisman guide | rebellion-items | tested | parsed from disk in MenuEngineTest; first-boot extraction into the data folder live-verified (boot smoke) |
+| /rebellionitems inspect\|annotate\|reload\|status, /rebellionmenu <id> | rebellion-items | implemented | boot verified (menus extracted, /talismanguide + /itemcodex registered); player-level verification planned |
 | Annotation flows: block drops, crafting output, smithing output, container open | rebellion-items | implemented | config-gated (default off); event-bounded, no scans |
 | Placeholder contributor architecture (module-routed `rebellion` expansion) | rebellion-api + rebellion-core | implemented | api: PlaceholderContributor; core: CorePlaceholders routes via ServicesManager |
 | `%rebellion_rarity_<material>%` placeholder | rebellion-items | tested | pure registry read; junk input → null (PAPI leaves text untouched) |
@@ -47,7 +48,7 @@ its owning module has tests passing in `./gradlew test`.
 | Movement sampling (O(1) event marks + cadenced async sweep) | rebellion-wards | tested | MovementFeedTest; ~50 ns/event measured |
 | rb_wards schema + transactional caps + UNIQUE race backstops | rebellion-wards | tested | WardServiceIT (14, real SQLite): concurrent name/anchor/cap races |
 | Alert routing (team/owner/both channels, owner fallback) | rebellion-wards | tested | AlertRouterTest; MiniMessage injection neutralized (parsed component has no click events) |
-| /ward create\|remove\|toggle\|list\|info, /wardadmin list\|remove\|mask | rebellion-wards | implemented | command logic; server-level verification planned |
+| /ward create\|remove\|toggle\|list\|info, /wardadmin list\|remove\|mask | rebellion-wards | implemented | module enable + migration live-verified (boot smoke); player-level command verification planned |
 | %rebellion_nearest_ward_distance%, %rebellion_ward_count% | rebellion-wards | tested | own-network intel only; decoys/inactive excluded |
 | Wards map marker provider (default off) | rebellion-wards | tested | publishes only when map-markers.publish-wards: true, active real wards only |
 | Dragon 26.3 controller spike (API surface probe + report) | rebellion-dragons | tested | DragonApi263SpikeTest against pinned paper-api 26.3.226; ADR-0008; production controls gated on live experiments |
@@ -62,10 +63,10 @@ its owning module has tests passing in `./gradlew test`.
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Inspect, research, ledgers, ADRs | researched (this commit set) |
-| 1 | Foundation + module loader contracts | implemented + tested (unit level) |
-| 2 | Item identity, rarity registry, lore service, talisman tiers, DeluxeMenus-shaped menus | annotation flows complete and opt-in; PAPI item placeholder shipped; custom item registry with talisman family examples shipped; remaining: per-menu open_command registration, admin audit/recovery views over inventories, talisman activation mechanics |
-| 3 | Teams, chat, friendly-fire attribution | implemented + tested (unit level); live-server verification planned |
-| 4 | No-claim wards, calibrated distance, intel | implemented + tested (unit level); km display disabled until calibrated; measured pipeline costs in docs/PERFORMANCE.md; live-server verification planned |
+| 1 | Foundation + module loader contracts | implemented + tested (unit level); boot verified on Paper 26.3 build 226 (ADR-0011) |
+| 2 | Item identity, rarity registry, lore service, talisman tiers, DeluxeMenus-shaped menus | annotation flows complete and opt-in; PAPI item placeholder shipped; custom item registry with talisman family examples shipped; module enable + menu extraction live-verified; remaining: per-menu open_command registration, admin audit/recovery views over inventories, talisman activation mechanics, player-level menu flows |
+| 3 | Teams, chat, friendly-fire attribution | implemented + tested (unit level); module enable + migration live-verified; player flows (invites, chat) need interactive verification |
+| 4 | No-claim wards, calibrated distance, intel | implemented + tested (unit level); module enable + migration + persisted-ward load live-verified; km display disabled until calibrated; measured pipeline costs in docs/PERFORMANCE.md; ward walking/alert flows need interactive verification |
 | 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | spike delivered (ADR-0008: verified API surface, two removals found, live-experiment gate defined); production controls intentionally blocked until live proofs; lineage registry persistence layer delivered and tested (ADR-0009: registry, CAS idempotency for issue/hatch/death, recovery mailbox, audited retirement); remaining: ADR-0008 live experiments, then controller + egg-item listeners + commands |
 | 6 | Three dimension artifacts + Rebellion event | planned |
 | 7 | Rare souls, rituals, tracking | planned |
@@ -98,9 +99,16 @@ its owning module has tests passing in `./gradlew test`.
 - Ward kilometer display is disabled for every world until an operator
   calibrates `distance.world-units-per-kilometer` per world
   (docs/CONFIGURATION.md). Until then distances report in blocks/meters only.
-- No live Paper 26.3 runtime in this environment: the ward pipeline
-  (movement sampling, anchor raytrace, alert rendering) and teams/wards
-  integration need the documented manual smoke pass.
+- Paper 26.3 boot-level verification now runs headlessly
+  (`scripts/boot-smoke.sh`, ADR-0011): install order, config generation,
+  migrations, console surface, restart and shutdown are live-verified on
+  build 226. The ward pipeline (movement sampling, anchor raytrace, alert
+  rendering), teams invites/chat and menu clicking still need the documented
+  interactive pass.
+- Feature modules (items/teams/wards) bundle `messages.yml` but do not
+  extract or render it yet — module chat/alert copy still uses hard-coded
+  strings. Wiring the Core messages pattern into the feature modules is a
+  follow-up slice; the boot smoke surfaced the gap.
 
 Session additions (2026-10-28, dragons persistence layer):
 

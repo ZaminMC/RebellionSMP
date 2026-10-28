@@ -31,6 +31,10 @@ public final class ItemsModuleState {
             new CustomItemLoader(CustomItemLoader.BUKKIT_VALIDATOR);
     private final MenuRegistry menus;
 
+    /** Mirrors MenuRegistry's file-name rule (traversal-safe, .yml only). */
+    private static final java.util.regex.Pattern MENUS_FILE_NAME =
+            java.util.regex.Pattern.compile("[a-z0-9_]{1,48}\\.yml");
+
     private volatile ItemsConfig config;
     private volatile RarityRegistry rarities;
     private volatile AnnotateService annotator;
@@ -101,7 +105,34 @@ public final class ItemsModuleState {
             issues.add("items.yml: unreadable: " + e.getMessage());
         }
 
-        // menus
+        // menus: copy bundled defaults into the data folder when missing —
+        // never over admin edits (same no-copy-over contract as config.yml).
+        // Extraction is keyed by the config's registry mapping; a file the jar
+        // does not carry (admin-authored menu) is left untouched and reported
+        // as "file not found" by the registry, which is the correct signal.
+        // Guards mirror MenuRegistry's FILE_NAME rule so an invalid registry
+        // entry can never steer extraction outside the menus directory.
+        java.nio.file.Path menusDirectory = dataDirectory.resolve("menus");
+        for (String file : cfgResult.config().menuRegistry().values()) {
+            if (file == null
+                    || !MENUS_FILE_NAME.matcher(file.toLowerCase(java.util.Locale.ROOT)).matches()) {
+                continue;
+            }
+            java.nio.file.Path target = menusDirectory.resolve(file);
+            if (!target.normalize().startsWith(menusDirectory.normalize())
+                    || java.nio.file.Files.exists(target)) {
+                continue;
+            }
+            try (var in = ItemsModuleState.class.getResourceAsStream("/menus/" + file)) {
+                if (in != null) {
+                    java.nio.file.Files.createDirectories(menusDirectory);
+                    java.nio.file.Files.copy(in, target);
+                }
+            } catch (java.io.IOException e) {
+                issues.add("menus/" + file + ": bundled copy failed: " + e.getMessage());
+            }
+        }
+
         MenuRegistry.LoadResult menuResult = menus.loadCandidate(cfgResult.config().menuRegistry());
         issues.addAll(menuResult.issues());
 

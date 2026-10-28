@@ -40,6 +40,14 @@ public final class RebellionItemsPlugin extends JavaPlugin {
             }
         } catch (Exception e) {
             logger.severe("RebellionItems failed to enable: " + e.getMessage());
+            // Register + mark FAILED so /rebellion modules shows the failure
+            // (parity with teams/wards; previously items vanished from the
+            // module list entirely on a bootstrap failure).
+            RebellionApi.find(ModuleRegistry.class).ifPresent(registry -> {
+                registry.register(new ModuleDescriptor("items", "RebellionItems",
+                        getPluginMeta().getVersion()));
+                registry.update("items", ModuleState.FAILED, e.getMessage());
+            });
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -104,8 +112,11 @@ public final class RebellionItemsPlugin extends JavaPlugin {
             menuCommands.unregisterAll(getServer().getCommandMap());
         }
         // Snapshot update so /rebellion modules reflects reality during shutdown.
+        // A FAILED module keeps its failure reason (same contract as teams/wards).
         RebellionApi.find(ModuleRegistry.class)
-                .ifPresent(registry -> registry.update("items", ModuleState.DISABLED, "shutdown"));
+                .ifPresent(registry -> registry.health("items")
+                        .filter(h -> h.state() != ModuleState.FAILED)
+                        .ifPresent(h -> registry.update("items", ModuleState.DISABLED, "shutdown")));
         getServer().getServicesManager().unregisterAll(this);
         annotationListener = null;
         state = null;

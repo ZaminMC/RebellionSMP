@@ -10,9 +10,12 @@
   runs the same build/tests and publishes the numbered dev prerelease
   (ADR-0010); ci.yml keeps pull requests and the read-only `main` push
   validation.
-- A real Paper 26.3 server is not available in this environment; server-level
-  verification is a documented manual gate before any "verified-on-Paper-26.3"
-  status.
+- A real Paper 26.3 server is available headlessly via the boot-smoke
+  harness (`scripts/boot-smoke.sh`, ADR-0011): boot-level verification runs
+  in this environment (install order, config generation, migrations,
+  console surface, restart, shutdown). Player-level interaction (menus,
+  invites, ward walking, combat) still requires an interactive session and
+  stays a manual gate before any full "verified-on-Paper-26.3" status.
 
 ## Suites (implemented)
 
@@ -63,15 +66,47 @@ was run 3× consecutively with `--rerun-tasks` to confirm stability.
      destruction routing and the ADR-0008 experiment set.
 5. **DB outage drills**: unique-asset creation under saturation = fail closed.
 
-## Manual Paper 26.3 checklist (pre-release gate, not yet run)
+## Verified on Paper 26.3 (headless boot smoke, 2026-10-28)
 
-- [ ] Clean server, drop RebellionAPI + RebellionCore, boot: both enable in order.
+Run with `scripts/boot-smoke.sh` against Paper 26.3 build 226 (sha256-verified
+via the fill API), released v0.1.0-dev.2 jars for the first pass, fixed local
+jars for the re-run. Log excerpts preserved in docs/WORKLOG session 7.
+
+- [x] Clean server, all five installable JARs (API, Core, Items, Teams,
+      Wards) load and enable in the documented install order; dragons
+      correctly ships no descriptor and is not installable by design.
+- [x] First boot generates every module's data files: Core
+      `config.yml`/`database.yml`/`messages.yml` + SQLite (WAL), Items
+      `config.yml`/`items.yml`/`rarities.yml` + extracted bundled
+      `menus/{item_codex,talisman_guide}.yml`, Teams/Wards `config.yml`.
+- [x] Schema migrations apply on first boot (teams v1, wards v1) and are a
+      no-op on the second boot ("Schema '…' at migration version 1").
+- [x] Console surface: `rebellion status` (no stray tags, queue counts,
+      migration counts), `rebellion modules` (all operational),
+      `rebellion diagnose` (report written with incident ID under
+      `plugins/RebellionCore/diagnostics/`).
+- [x] PlaceholderAPI absent: Core boots, placeholders stay inactive.
+- [x] Restart: configs preserved (no recreation), modules re-enable,
+      persisted ward load runs, migrations do not re-apply.
+- [x] Graceful shutdown: modules disable in reverse order
+      (Items → Wards → Teams → Core → API), Hikari pool closes, clean exit.
+
+The first smoke run caught five real defects (all fixed and re-verified in
+the same session): `YamlConfiguration.load(String)` treats its argument as
+a path (Teams/Wards enabled nothing but a FileNotFoundException whose
+message was the file content); Items never extracted its bundled menus and
+refused to enable; onDisable rewrote FAILED modules to
+"disabled — shutdown", hiding failures; a failed Items bootstrap vanished
+from the module registry entirely; and a paired `</state>` closing tag leaked
+into the status line. Details in ADR-0011.
+
+## Manual Paper 26.3 checklist (interactive; not yet run)
+
 - [ ] Break `config.yml` deliberately: Core disables with a precise message.
-- [ ] `/rebellion status`, `modules`, `diagnose` (report file written),
-      `reload` (bad candidate keeps previous config).
-- [ ] PlaceholderAPI present/absent: expansion registers/doesn't; unknown
+- [ ] `/rebellion reload` on the live server (bad candidate keeps previous
+      config).
+- [ ] PlaceholderAPI present: expansion registers; unknown
       placeholders render untouched.
-- [ ] Restart persistence: schema bootstrap is a no-op the second boot.
 - [ ] RebellionItems on Paper 26.3: `/rebellionitems give talisman_haste_artifact`
       → stack carries item_id/rarity/tier/instance_id PDC, glint, styled
       display name and rarity lore line; a second mint of a unique item gets a

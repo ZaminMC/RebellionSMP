@@ -501,3 +501,90 @@ green (verified with `./gradlew test --rerun-tasks` before any change).
   `plugin.yml` automatically adds its jar to every future release).
 - Serverless fallback: Phase 6 groundwork — ADR-0011 dimension-artifact
   state machine schema (persistence-first style).
+
+## 2026-10-28 — Session 7: headless Paper 26.3 boot smoke — five live defects found + fixed
+
+**Context**
+
+- New PAT provided by the project owner (old one intermittently rejected
+  by the Actions API and previously flagged as exposed). Rotated before any
+  work: git remote updated, `ABASING_TOKEN` secret updated via the sealed
+  box API (HTTP 204), fetch/pull verified against develop.
+- Master prompt re-read from remote: unchanged (615 lines, hash-verified).
+- Documented next task was ADR-0008 live experiments (needs interactive
+  players — genuinely manual) or serverless Phase 6 work. Instead, this
+  session removed the long-standing "no live server" blocker itself: a
+  headless boot smoke is possible in this environment.
+
+**Work**
+
+- Downloaded the pinned server, Paper 26.3 build 226, via the fill v3 API
+  (v2 is sunset): `paper-26.3-226.jar`, sha256
+  `1373c651510d4aeee7e7903f3cfd7003919c1a364528dbe124a4ae40e11a766e` —
+  verified.
+- Boot smoke pass 1 used the RELEASED v0.1.0-dev.2 jars (what users
+  actually download). API + Core enabled cleanly (config generation,
+  shaded+relocated HikariCP pool visible in logs, SQLite WAL,
+  PlaceholderAPI-absent handled). Teams, Wards, Items ALL FAILED to enable.
+- Root-caused five defects (details in ADR-0011):
+  1. `YamlConfiguration.load(String)` = path, not content → Teams/Wards
+     threw FileNotFoundException whose message was the file content.
+     Fixed with `loadFromString` in both plugins.
+  2. Items never extracted bundled `menus/*.yml` → enable refused.
+     Fixed: copy-if-missing extraction in `ItemsModuleState.bootstrap`,
+     keyed by the config registry, traversal-guarded, no-clobber.
+  3. `onDisable` rewrote FAILED → `DISABLED "shutdown"`, hiding failures.
+     Fixed in all three plugins: FAILED is terminal until re-enable.
+  4. Failed Items bootstrap never registered with the module registry.
+     Fixed: register + mark FAILED like teams/wards.
+  5. Paired `</state>` closing tag leaked into `rebellion status`.
+     Fixed: bare `<state>` placeholder (comment documents the rule).
+- Re-verified with fixed local jars — boot smoke pass 2 + restart pass:
+  all five modules enable in order, menus extracted, `/talismanguide` +
+  `/itemcodex` registered via the command bridge, teams+wards migrations
+  apply (v1) and are restart-idempotent, console surface clean
+  (`rebellion status` no stray tags; `modules` all operational; `diagnose`
+  writes report INC-20261028-004403-000001), configs preserved across
+  restart, graceful reverse-order shutdown with Hikari close.
+- Committed the harness as `scripts/boot-smoke.sh` (portable: env-var
+  driven, checksum-verified fetch, FIFO console) and documented the gate in
+  TEST_PLAN ("Verified on Paper 26.3" section), COMPATIBILITY_MATRIX
+  (Paper row now boot-verified), MASTER_LEDGER (harness row; API/Core
+  boot-verified rows; phase roadmap 1-4 live-verification notes; honest
+  limitation: bundled messages.yml not yet wired in feature modules), and
+  ADR-0011.
+
+**Commands/results**
+
+- `./gradlew build --no-daemon` — green after fixes; `./gradlew test
+  --rerun-tasks` — green (all suites re-ran).
+- Boot smoke: 2 clean boots + 1 restart against paper-26.3-226.jar;
+  log excerpts: "RebellionTeams … enabled (max members 8, proximity 100.0
+  blocks)", "RebellionWards … enabled (0 wards loaded … Wards report
+  information only; they do not protect land)", "RebellionItems … enabled
+  (mode: CUSTOM_ONLY, menus: 2)", "Migrations applied: 2 across 2
+  module(s)", "Done (12.755s)".
+- PAT rotation verified: secret PUT 204, `git fetch`/`pull` via new token,
+  release pipeline run on push = the end-to-end token proof (see below).
+
+**Honest limitations**
+
+- Boot-level only: no player joined the server; menus, invites, ward
+  walking, combat and the ADR-0008 dragon experiments remain interactive
+  gates.
+- `/rebellion reload`, deliberately-broken-config disable path, and
+  PlaceholderAPI-present behavior are still unverified (still in the
+  manual checklist).
+- Feature modules still ship `messages.yml` without extracting/rendering
+  it (hard-coded copy in use) — follow-up slice, recorded in the ledger.
+- The scratch server dir (`/home/z/my-project/paper-test` locally) is
+  disposable and never committed.
+
+**Next task (for the next session)**
+
+- Wire feature-module `messages.yml` through the Core messages pattern
+  (extraction + rendering), then re-run the boot smoke.
+- Phase 5 remaining: ADR-0008 live experiments (interactive), then the
+  dragons controller slice + wiring.
+- Serverless fallback: Phase 6 groundwork — ADR-0012 dimension-artifact
+  state machine schema.

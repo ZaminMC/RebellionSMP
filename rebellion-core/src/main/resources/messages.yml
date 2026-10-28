@@ -15,7 +15,11 @@ common:
 status:
   header: "<gold>RebellionSMP status</gold>"
   version: "<gray>Core <white><version></white>, API <white><api></white></gray>"
-  backend: "<gray>Database backend: <white><backend></white><state></state></gray>"
+  # <state> is a bare runtime placeholder resolved by the status command
+  # (Placeholder.component). MiniMessage placeholder tags have no closing
+  # form — a paired </state> would leak as literal text (caught live on
+  # Paper 26.3: the status line rendered "... (healthy)</state>").
+  backend: "<gray>Database backend: <white><backend></white><state></gray>"
   backend-ok: " <green>(healthy)</green>"
   backend-degraded: " <red>(degraded)</red>"
   pool: "<gray>Persistence queue: <white><queued></white> queued, <white><active></white> active, <white><completed></white> completed</gray>"
