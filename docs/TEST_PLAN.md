@@ -86,12 +86,15 @@ was run 3× consecutively with `--rerun-tasks` to confirm stability.
       verified by this manual gate. MockBukkit does not support 26.3 (its
       latest targets 1.21). Same applies to `org.bukkit.attribute.Attribute`
       (probe-caught, ADR-0008).
-- [ ] Release pipeline on GitHub (first automated run, ADR-0010): a push to
-      `develop` cuts `vX.Y.Z-dev.N` — the release exists with exactly the
-      installable JARs (API, Core, Items, Teams, Wards), `prerelease: true`,
-      authored by Abasing, the `releases/latest` endpoint does not resolve
-      to it, the version-bump commit on `develop` carries `[skip ci]`, and
-      the run triggered by that bump commit is skipped.
+- [x] Release pipeline on GitHub (first automated run, ADR-0010 — verified
+      2026-10-28, run #1 at `ef4077c`): push to `develop` cut
+      `v0.1.0-dev.1` — release exists with exactly the installable JARs
+      (API, Core, Items, Teams, Wards; dragons correctly absent),
+      `prerelease: true`, authored by Abasing, the `releases/latest`
+      endpoint returns 404 (dev build is not latest), the version-bump
+      commit on `develop` carries `[skip ci]`, and the run triggered by
+      that bump commit completed without cutting another release
+      (verified via git: HEAD stayed at the bump commit; no `dev.2` tag).
 - [ ] Teams on Paper 26.3: invite→accept happy path, kick/leave/disband,
       friendly-fire cancellation matrix (melee/projectile/TNT/pet/cloud),
       team + proximity chat channels, `/team history` rendering.

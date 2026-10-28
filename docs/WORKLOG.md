@@ -426,3 +426,78 @@ green (verified with `./gradlew test --rerun-tasks` before any change).
   groundwork — ADR-0010 dimension-artifact state machine schema (same
   persistence-first style), or the teams/wards live-smoke checklist
   expansion.
+
+## 2026-10-28 — Session 6: release pipeline — numbered dev prereleases from develop
+
+**Context**
+
+- Project-owner instruction: add GitHub automation so every build is
+  released automatically as a **pre-release, never `latest`**, mirroring
+  ZaminMC/ZaminTorch's build automation. Repository had CI only (build +
+  artifact upload): 0 tags, 0 releases, no download path.
+
+**Work**
+
+- Studied ZaminTorch's `.github/workflows/release.yml` in full (tag ledger,
+  pre-build bump sync with `[skip ci]` loop-breaker, lightweight tags,
+  `gh release create --prerelease` through a PAT secret, orphan-tag repair,
+  idempotent re-runs) and adapted it to this repository's build
+  (ADR-0010):
+  - numbering `vX.Y.Z-dev.N` from a single tag ledger — one numbering
+    across base version bumps (pre-flight-tested: `0.1.0-dev.2` →
+    `0.2.0-dev.3`);
+  - version stamping is one line (`gradle.properties`), propagated into
+    every `plugin.yml` by `processResources`;
+  - artifacts discovered, not hardcoded: exactly the modules shipping
+    `plugin.yml` are staged into `build/release/` with a descriptor
+    assertion per jar (`rebellion-dragons` is reported as
+    built-but-not-installable; future modules need zero pipeline edits);
+  - `ci.yml` trimmed to PRs + `main` push validation so a develop push is
+    never built twice.
+- Created the `ABASING_TOKEN` Actions secret (classic PAT of the Abasing
+  account) so the pipeline's bump commit, tag, and release are authored as
+  Abasing, never `github-actions[bot]` (ZaminTorch parity).
+- Docs: ADR-0010; README dev-builds section + stale module table fixed
+  (teams/wards were listed as "not yet built"); OPERATIONS "Obtaining
+  builds"; MASTER_LEDGER row; AGENTS.md auto-release rule for future
+  sessions; TEST_PLAN environment + verified gate.
+
+**Commands/results**
+
+- Pre-flight (local): YAML parse of both workflows; ledger dry-runs
+  (first build → `v0.1.0-dev.1`, next → `dev.2` with prev linkage, base
+  bump → `v0.2.0-dev.3`); staging dry-run against real build/libs →
+  `STAGED=5 SKIPPED=rebellion-dragons`.
+- Baseline `./gradlew build --no-daemon` — exit 0 (289 tests) before any
+  change.
+- **Live verification (run #1, `ef4077c`, conclusion: success):** push to
+  develop auto-cut `v0.1.0-dev.1` — release carries the 5 installable
+  JARs, `prerelease: true`, author Abasing; `releases/latest` returns 404
+  (never latest); bump commit `ece22d4 … [skip ci]` pushed by the
+  pipeline; the run triggered by that bump push completed without cutting
+  another release (git-verified: HEAD stayed at `ece22d4`, no `dev.2`
+  tag). All assertions recorded in TEST_PLAN.
+
+**Honest limitations**
+
+- The Actions **API** (not the web UI, not git) intermittently rejected
+  the PAT with `401 Bad credentials` while `rate_limit` and release
+  endpoints accepted it (2026-10-28). The pipeline itself succeeded.
+  The PAT is long-lived and previously flagged as exposed — rotating it
+  and updating the `ABASING_TOKEN` secret is recommended; pipeline impact
+  of rotation is one secret update (ADR-0010 documents this).
+- `rebellion-dragons` ships no plugin descriptor yet (ADR-0009 scope), so
+  its jar is deliberately absent from releases — noted in the release
+  notes automatically.
+- Stable/`latest` releases from `main` remain a manual reviewed process;
+  automating them is explicitly out of scope (ADR-0010).
+
+**Next task (for the next session)**
+
+- Phase 5 remaining: run the ADR-0008 live experiments on a real Paper
+  26.3 server and record results in TEST_PLAN; then the dragons controller
+  slice + egg-item protection listeners + `/dragon` commands +
+  DragonsPlugin wiring over the tested LineageService (gaining
+  `plugin.yml` automatically adds its jar to every future release).
+- Serverless fallback: Phase 6 groundwork — ADR-0011 dimension-artifact
+  state machine schema (persistence-first style).
