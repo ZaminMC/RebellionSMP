@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import net.zaminmc.rebellion.api.messages.MessageCatalog;
 import net.zaminmc.rebellion.items.identity.CustomItemLoader;
 import net.zaminmc.rebellion.items.identity.CustomItemSpec;
 import net.zaminmc.rebellion.items.lore.AnnotateService;
@@ -39,6 +40,7 @@ public final class ItemsModuleState {
     private volatile RarityRegistry rarities;
     private volatile AnnotateService annotator;
     private volatile LorePlanner planner;
+    private volatile MessageCatalog messages;
     private volatile java.util.Map<String, CustomItemSpec> customItems = java.util.Map.of();
 
     public ItemsModuleState(Path dataDirectory, Logger logger) {
@@ -54,6 +56,21 @@ public final class ItemsModuleState {
      */
     public List<String> bootstrap() {
         List<String> issues = new ArrayList<>();
+
+        // messages.yml (ADR-0012): unreadable = fatal; missing keys or invalid
+        // templates are warnings — the bundled default fills in so the module
+        // still boots. Loaded first so nothing below renders through a catalog
+        // that is not active yet; assigned only in activate() so a failed
+        // bootstrap/reload can never half-apply messages.
+        MessageCatalog.LoadResult messageResult;
+        try {
+            messageResult = MessageCatalog.load(dataDirectory.resolve("messages.yml"),
+                    "messages.yml", ItemsModuleState.class, logger);
+        } catch (MessageCatalog.MessageFileException e) {
+            issues.add("messages.yml: unreadable: " + e.getMessage());
+            return List.copyOf(issues);
+        }
+        messageResult.issues().forEach(issue -> logger.warning("messages.yml: " + issue));
 
         // config.yml
         YamlConfiguration configYaml;
@@ -140,7 +157,7 @@ public final class ItemsModuleState {
             return List.copyOf(issues);
         }
 
-        activate(cfgResult.config(), raritiesResult.registry(), menuResult);
+        activate(cfgResult.config(), raritiesResult.registry(), menuResult, messageResult.catalog());
         return List.of();
     }
 
@@ -162,9 +179,10 @@ public final class ItemsModuleState {
     }
 
     private synchronized void activate(ItemsConfig cfg, RarityRegistry registry,
-            MenuRegistry.LoadResult menuResult) {
+            MenuRegistry.LoadResult menuResult, MessageCatalog newMessages) {
         this.config = cfg;
         this.rarities = registry;
+        this.messages = newMessages;
         this.planner = new LorePlanner(switch (cfg.lorePosition()) {
             case TOP -> LorePlanner.Position.TOP;
             case BOTTOM -> LorePlanner.Position.BOTTOM;
@@ -205,6 +223,11 @@ public final class ItemsModuleState {
 
     public MenuRegistry menus() {
         return menus;
+    }
+
+    /** @return the active message catalog (swapped atomically by reload). */
+    public MessageCatalog messages() {
+        return messages;
     }
 
     /** @return the currently active custom item definitions (immutable). */

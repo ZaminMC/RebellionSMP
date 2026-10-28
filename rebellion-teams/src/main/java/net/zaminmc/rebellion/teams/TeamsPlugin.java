@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.util.concurrent.TimeUnit;
 import net.zaminmc.rebellion.api.RebellionApi;
 import net.zaminmc.rebellion.api.database.RebellionDatabase;
+import net.zaminmc.rebellion.api.messages.MessageCatalog;
 import net.zaminmc.rebellion.api.module.ModuleDescriptor;
 import net.zaminmc.rebellion.api.module.ModuleRegistry;
 import net.zaminmc.rebellion.api.module.ModuleState;
@@ -36,6 +37,7 @@ public final class TeamsPlugin extends JavaPlugin {
 
     private TeamService service;
     private ChatTracker chat;
+    private MessageCatalog messages;
 
     @Override
     public void onEnable() {
@@ -43,7 +45,7 @@ public final class TeamsPlugin extends JavaPlugin {
         ModuleRegistry modules;
         RebellionDatabase database;
 
-        // 1. Configuration ----------------------------------------------------
+        // 1. Configuration + messages ----------------------------------------
         try {
             var dataDirectory = getDataFolder().toPath();
             Files.createDirectories(dataDirectory);
@@ -61,6 +63,15 @@ public final class TeamsPlugin extends JavaPlugin {
                 loaded.issues().forEach(issue -> logger.severe("  " + issue));
                 throw new IllegalStateException("config.yml invalid (see issues above)");
             }
+
+            // messages.yml (ADR-0012): unreadable = enable failure (caught
+            // below, Core keeps running); missing keys or invalid templates
+            // are warnings — the bundled default fills in.
+            MessageCatalog.LoadResult messagesResult = MessageCatalog.load(
+                    dataDirectory.resolve("messages.yml"), "messages.yml",
+                    TeamsPlugin.class, logger);
+            messagesResult.issues().forEach(issue -> logger.warning("messages.yml: " + issue));
+            messages = messagesResult.catalog();
 
             // 2. Core services ----------------------------------------------
             database = RebellionApi.require(RebellionDatabase.class);
@@ -89,7 +100,7 @@ public final class TeamsPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new FriendlyFireListener(service, logger), this);
         getServer().getPluginManager().registerEvents(
-                new ChatListener(service, chat, logger), this);
+                new ChatListener(service, chat, messages, logger), this);
 
         // 6. Commands -----------------------------------------------------------
         PluginCommand team = getCommand("team");
@@ -100,10 +111,10 @@ public final class TeamsPlugin extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-        TeamCommand teamExecutor = new TeamCommand(service, logger);
+        TeamCommand teamExecutor = new TeamCommand(service, messages, logger);
         team.setExecutor(teamExecutor);
         team.setTabCompleter(teamExecutor);
-        ChatCommand channelExecutor = new ChatCommand(service, chat);
+        ChatCommand channelExecutor = new ChatCommand(service, chat, messages);
         chatCommand.setExecutor(channelExecutor);
         chatCommand.setTabCompleter(channelExecutor);
 
@@ -140,6 +151,7 @@ public final class TeamsPlugin extends JavaPlugin {
         getServer().getServicesManager().unregisterAll(this);
         service = null;
         chat = null;
+        messages = null;
         getLogger().info("RebellionTeams disabled.");
     }
 

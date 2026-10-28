@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit;
 import net.zaminmc.rebellion.api.RebellionApi;
 import net.zaminmc.rebellion.api.database.RebellionDatabase;
 import net.zaminmc.rebellion.api.map.MapMarkerProvider;
+import net.zaminmc.rebellion.api.messages.MessageCatalog;
 import net.zaminmc.rebellion.api.module.ModuleDescriptor;
 import net.zaminmc.rebellion.api.module.ModuleRegistry;
 import net.zaminmc.rebellion.api.module.ModuleState;
@@ -57,6 +58,7 @@ public final class WardsPlugin extends JavaPlugin {
     private MovementFeed feed;
     private DetectionState detectionState;
     private BukkitTask sweepTask;
+    private MessageCatalog messages;
 
     @Override
     public void onEnable() {
@@ -65,7 +67,7 @@ public final class WardsPlugin extends JavaPlugin {
         RebellionDatabase database;
         WardsConfig config;
 
-        // 1. Configuration ----------------------------------------------------
+        // 1. Configuration + messages ----------------------------------------
         try {
             var dataDirectory = getDataFolder().toPath();
             Files.createDirectories(dataDirectory);
@@ -84,6 +86,15 @@ public final class WardsPlugin extends JavaPlugin {
                 throw new IllegalStateException("config.yml invalid (see issues above)");
             }
             config = loaded.config();
+
+            // messages.yml (ADR-0012): unreadable = enable failure (caught
+            // below, Core keeps running); missing keys or invalid templates
+            // are warnings — the bundled default fills in.
+            MessageCatalog.LoadResult messagesResult = MessageCatalog.load(
+                    dataDirectory.resolve("messages.yml"), "messages.yml",
+                    WardsPlugin.class, logger);
+            messagesResult.issues().forEach(issue -> logger.warning("messages.yml: " + issue));
+            messages = messagesResult.catalog();
 
             // 2. Core services ------------------------------------------------
             database = RebellionApi.require(RebellionDatabase.class);
@@ -113,7 +124,7 @@ public final class WardsPlugin extends JavaPlugin {
                 System::currentTimeMillis);
         WardDetector detector = new WardDetector(config, detectionState, teams,
                 new BukkitMaskingResolver(config, timedMasking, getServer()));
-        AlertRouter router = new AlertRouter(this, config, distances, teams);
+        AlertRouter router = new AlertRouter(this, config, distances, messages, teams);
 
         // 5. Load persisted wards into the mirror ------------------------------
         try {
@@ -132,7 +143,7 @@ public final class WardsPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new WardMoveListener(feed, service), this);
         getServer().getPluginManager().registerEvents(
-                new AnchorBreakListener(this, service, config), this);
+                new AnchorBreakListener(this, service, config, messages), this);
         WardSweepTask sweep = new WardSweepTask(config, index, feed, detector,
                 detectionState, router);
         sweepTask = getServer().getScheduler().runTaskTimerAsynchronously(this, sweep,
@@ -147,10 +158,10 @@ public final class WardsPlugin extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-        WardCommand wardExecutor = new WardCommand(service, config, distances, teams);
+        WardCommand wardExecutor = new WardCommand(service, config, distances, teams, messages);
         ward.setExecutor(wardExecutor);
         ward.setTabCompleter(wardExecutor);
-        WardAdminCommand adminExecutor = new WardAdminCommand(service, config, timedMasking);
+        WardAdminCommand adminExecutor = new WardAdminCommand(service, config, timedMasking, messages);
         wardAdmin.setExecutor(adminExecutor);
         wardAdmin.setTabCompleter(adminExecutor);
 
@@ -190,6 +201,7 @@ public final class WardsPlugin extends JavaPlugin {
         service = null;
         feed = null;
         detectionState = null;
+        messages = null;
         getLogger().info("RebellionWards disabled.");
     }
 

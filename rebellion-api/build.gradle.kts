@@ -25,8 +25,12 @@ dependencies {
     // Provided by the server at runtime; the API JAR ships no bundled libraries.
     compileOnly(libs.paper.api)
 
+    // MessageCatalog tests run YamlConfiguration + MiniMessage server-free
+    // (same justification as rebellion-core's test dependencies).
+    testImplementation(libs.paper.api)
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.jupiter)
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.processResources {

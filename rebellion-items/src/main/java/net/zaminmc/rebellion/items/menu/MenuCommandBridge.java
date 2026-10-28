@@ -5,8 +5,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
-import net.kyori.adventure.text.Component;
+import net.zaminmc.rebellion.api.messages.MessageCatalog;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandMap;
 import org.bukkit.command.CommandSender;
@@ -48,12 +49,15 @@ public final class MenuCommandBridge {
 
     private final Logger logger;
     private final Opener opener;
+    /** Live catalog supplier so reloaded messages apply without re-registering. */
+    private final Supplier<MessageCatalog> messages;
     /** label -> command currently registered by this bridge (only ours). */
     private final Map<String, DynamicMenuCommand> registered = new LinkedHashMap<>();
 
-    public MenuCommandBridge(Logger logger, Opener opener) {
+    public MenuCommandBridge(Logger logger, Opener opener, Supplier<MessageCatalog> messages) {
         this.logger = logger;
         this.opener = opener;
+        this.messages = messages;
     }
 
     /**
@@ -87,7 +91,7 @@ public final class MenuCommandBridge {
                         + "' collides with an existing server command; not registered");
                 continue;
             }
-            DynamicMenuCommand command = new DynamicMenuCommand(label, owners.get(0), opener);
+            DynamicMenuCommand command = new DynamicMenuCommand(label, owners.get(0), opener, messages);
             if (commandMap.register("rebellion", command)) {
                 registered.put(label, command);
                 registeredLabels.add(label);
@@ -133,12 +137,15 @@ public final class MenuCommandBridge {
 
         private final String menuId;
         private final Opener opener;
+        private final Supplier<MessageCatalog> messages;
 
-        DynamicMenuCommand(String label, String menuId, Opener opener) {
+        DynamicMenuCommand(String label, String menuId, Opener opener,
+                Supplier<MessageCatalog> messages) {
             super(label, "Opens the RebellionSMP menu '" + menuId + "'.",
                     "/" + label, List.of());
             this.menuId = menuId;
             this.opener = opener;
+            this.messages = messages;
             setPermission("rebellion.items.menu." + menuId);
         }
 
@@ -148,16 +155,17 @@ public final class MenuCommandBridge {
 
         @Override
         public boolean execute(@NotNull CommandSender sender, @NotNull String label, String[] args) {
+            MessageCatalog catalog = messages.get();
             if (!(sender instanceof Player player)) {
-                sender.sendMessage(Component.text("Menus can only be opened by players."));
+                sender.sendMessage(catalog.msg("menu.player-only"));
                 return true;
             }
             if (!testPermissionSilent(sender)) {
-                sender.sendMessage(Component.text("You do not have permission to do that."));
+                sender.sendMessage(catalog.msg("common.no-permission"));
                 return true;
             }
             if (!opener.open(player, menuId)) {
-                sender.sendMessage(Component.text("That menu is not available right now."));
+                sender.sendMessage(catalog.msg("menu.unavailable"));
             }
             return true;
         }

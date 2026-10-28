@@ -1,5 +1,7 @@
 # RebellionItems messages. MiniMessage; every tag explicitly closed (the
 # loader validates this). Placeholders like <value> are filled by code.
+# Literal angle brackets escape only the opening bracket: \<player> — MiniMessage
+# has no \> escape (verified against adventure-text-minimessage 5.2.0).
 
 prefix: "<gradient:#c0392b:#8e44ad>Rebellion</gradient> <dark_gray>»</dark_gray> <gray></gray>"
 
@@ -7,22 +9,52 @@ common:
   no-permission: "<red>You do not have permission to do that.</red>"
   player-only: "<red>Only players can use this.</red>"
 
+usage: '<red>Usage: /rebellionitems \<inspect|annotate|give|audit|reload|status></red>'
+
 inspect:
+  player-only: "<red>Only players can hold a stack to inspect.</red>"
   none: "<gray>No RebellionSMP identity on the held stack.</gray>"
   header: "<gold>RebellionSMP item identity</gold>"
   line: "<gray>schema: <white><schema></white>, rarity: <white><rarity></white>, item id: <white><itemid></white>, instance: <white><instance></white>, tier: <white><tier></white></gray>"
 
 annotate:
+  player-only: "<red>Only players can annotate a held stack.</red>"
+  hold-stack: "<red>Hold a stack to annotate.</red>"
   success: "<green>Annotated held stack (idempotent; existing metadata preserved).</green>"
   rejected: "<red>Not annotated: the stack has no ItemMeta or an unknown item schema.</red>"
-  hold-stack: "<red>Hold a stack to annotate.</red>"
+
+give:
+  usage: '<red>Usage: /rebellionitems give \<item-id> [player]</red>'
+  unknown-item: "<red>No custom item '<item>' is defined in items.yml.</red>"
+  player-offline: "<red>Player '<player>' is not online.</red>"
+  console-needs-player: "<red>Console must specify a player: /rebellionitems give <id> <player></red>"
+  material-missing: "<red>Refused: the item's base material is unavailable on this server version.</red>"
+  success: "<green>Gave one '<item>' (id: <id>, rarity: <rarity><extra>) to <player>.</green>"
+
+audit:
+  usage: '<red>Usage: /rebellionitems audit \<player></red>'
+  player-offline: "<red>Player '<player>' is not online (audit is a live view of loaded inventories).</red>"
+  header: "<gold>RebellionSMP audit — <player></gold>"
+  summary: "<gray>scanned <scanned> stacks, tagged <tagged>, unique instances <unique></gray>"
+  line: "<gray><container>[<slot>]</gray> <white><material> x<amount></white> <gray>rarity <rarity><extra></gray>"
+  per-rarity: "<gray>per rarity: <counts></gray>"
+  none: "<gray>No RebellionSMP-tagged stacks found.</gray>"
 
 reload:
   success: "<green>Reloaded configuration, rarities, messages and menus.</green>"
   failed: "<red>Reload rejected; previous state stays active. Issues:</red>"
   issue: "<red>- <issue></red>"
+  menu-commands: "<gray>Menu commands active: <commands></gray>"
+
+status:
+  header: "<gold>RebellionItems status</gold>"
+  config: "<gray>annotation mode: <white><mode></white>, lore position: <white><position></white></gray>"
+  counts: "<gray>rarity overrides: <white><overrides></white>, menus: <white><menus></white><menulist></gray>"
+  module: "<gray>module state: <white><state></white></gray>"
 
 menu:
-  unknown: "<red>No menu '<menuid>' is registered.</red>"
-  usage: "<red>Usage: /rebellionmenu <menu-id></red>"
+  player-only: "<red>Menus can only be opened by players.</red>"
+  usage: '<red>Usage: /rebellionmenu \<menu-id></red>'
+  unknown: "<red>No menu '<menu>' is registered.</red>"
+  unavailable: "<red>That menu is not available right now.</red>"
   console-denied: "<red>Console actions are disabled on this server.</red>"

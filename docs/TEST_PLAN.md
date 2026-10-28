@@ -24,6 +24,9 @@
 | ConfigLoaderTest | bundled copying, no-clobber of admin edits, issue aggregation, env expansion, path traversal rejection | admin edits survive plugin updates; secrets expand from env |
 | CoreConfigLoaderTest / DatabaseConfigLoaderTest | schema-version, bounds (pool sizes, queue capacity, timeouts), backend enum, forced SQLite pool = 1 | invalid values disable Core with precise paths |
 | CoreMessagesTest | bundled defaults parse + render, strict closed-tag validation, unclosed-tag rejection, placeholder exemption, missing-key default fill, file creation | failed reload never replaces the active snapshot |
+| MessageCatalogTest (API) | shared loader contracts: extraction, admin-edit precedence, per-key fallback for invalid edits, user-only keys, traversal-guarded resource names, `\<` escape semantics, merge≡load equivalence (ADR-0012) | boot never renders broken templates silently; extraction cannot escape the data folder |
+| ItemsMessagesTest / TeamsMessagesTest / WardsMessagesTest | each shipped messages.yml strict-parses; every rendered key and every (action, outcome) pair exists; literal angle brackets render as text; first-boot extraction | a key drift between code and yml fails the build, not the game |
+| TeamsMessagesTest (chat formats) | `chat.team-format` / `chat.proximity-format` render `<sender>`/`<message>` component placeholders | channel formatting is admin-editable and injection-safe |
 | DatabaseServiceTest | bootstrap, CRUD, transactions + rollback, UUID/boolean binding, unsupported param rejection, bounded queue rejection with zero side effects, shutdown flush | rejection happens before any SQL executes |
 | MigrationRunnerTest | idempotent re-run, checksum mismatch refusal, downgrade refusal, version-gap rejection, failed migration rollback, bookkeeping rows | migrations are append-only and crash-resumable |
 | DiagnosticsServiceTest | incident ID format, bounded ring, report rotation, single-line sanitization, no-secrets contract | report structure cannot be broken by hostile summaries |
@@ -90,6 +93,24 @@ jars for the re-run. Log excerpts preserved in docs/WORKLOG session 7.
       persisted ward load runs, migrations do not re-apply.
 - [x] Graceful shutdown: modules disable in reverse order
       (Items → Wards → Teams → Core → API), Hikari pool closes, clean exit.
+
+Session 8 additions (same harness, fresh server dir, fixed local jars at
+v0.1.0-dev.3 + ADR-0012 wiring):
+
+- [x] First boot extracts `messages.yml` for Core, Items, Teams and Wards
+      ("Created default messages.yml." per module); no template warnings.
+- [x] Console feedback renders through the module catalogs:
+      `rebellionitems status` (header/config/count lines via placeholders),
+      `wardadmin list` ("Watch wards on this server (0):"), `team` from
+      console (prefixed player-only notice).
+- [x] Admin edit → `/rebellionitems reload` applies it live (custom
+      `status.header` rendered after reload without restart).
+- [x] Deliberately unclosed template: precise WARN naming the key
+      ("status.header: invalid MiniMessage … using bundled default"),
+      bundled default renders, module stays operational.
+- [x] Restart: admin file byte-identical (md5 before/after), no
+      re-extraction, same precise WARN for the still-broken edit, clean
+      13.7s boot, `rebellion status`/`diagnose` healthy, graceful stop.
 
 The first smoke run caught five real defects (all fixed and re-verified in
 the same session): `YamlConfiguration.load(String)` treats its argument as

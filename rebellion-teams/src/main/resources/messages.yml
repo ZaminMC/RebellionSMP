@@ -1,0 +1,129 @@
+# RebellionTeams messages. MiniMessage; every tag explicitly closed (the
+# loader validates this). Placeholders like <player> / <detail> are filled by
+# code at render time. Literal angle brackets escape only the opening
+# bracket: \<player> — MiniMessage has no \> escape (verified against
+# adventure-text-minimessage 5.2.0).
+#
+# Outcome keys are deterministic: team.<action>.<outcome> with the TeamOutcome
+# enum name lowercased and underscores as dashes (e.g. team.create.ok,
+# team.kick.cant-target-leader). Only truly action-independent texts share a
+# top-level key.
+
+prefix: "<gradient:#c0392b:#8e44ad>Rebellion</gradient> <dark_gray>»</dark_gray> <gray></gray>"
+
+common:
+  no-permission: "<red>You do not have permission to do that.</red>"
+  unavailable: "<red>That action is unavailable right now; nothing was changed. Please try again in a moment.</red>"
+
+usage: '<red>Usage: /team \<create|invite|accept|decline|uninvite|kick|leave|rename|disband|promote|demote|transfer|friendlyfire|ally|enemy|neutral|info|members|invites|history></red>'
+player-only: "<red>Team commands are player-only (use /rebellion modules for admin views).</red>"
+not-in-team: "<gray>You are not in a team.</gray>"
+target-not-online: "<red>Player '<player>' is not online (membership actions resolve online players only).</red>"
+name-invalid: "<red>Team names are 3-24 chars of letters, digits or underscore, and cannot be a reserved word.</red>"
+name-taken: "<red>That team name is already taken.</red>"
+no-team-named: "<red>No team with that name.</red>"
+
+team:
+  create:
+    ok: "<green>Team created. You are its leader.</green>"
+    already-in-team: "<red>You are already in a team. Leave it first.</red>"
+    create-cooldown: "<gray>You can create a new team in <detail>s.</gray>"
+  invite:
+    usage: '<red>Usage: /team invite \<player></red>'
+    ok: "<green>Invite handled for <player>.</green>"
+    no-officer-rights: "<red>Only officers and the leader may manage invites.</red>"
+    invite-queue-full: "<red><player> already has the maximum number of pending invites.</red>"
+    invite-rate-limited: "<gray>You can send another invite in <detail>s.</gray>"
+    invite-self: "<red>You cannot invite yourself.</red>"
+    invite-target-in-team: "<red><player> is already in a team.</red>"
+  uninvite:
+    usage: '<red>Usage: /team uninvite \<player></red>'
+    ok: "<green>Invite handled for <player>.</green>"
+    no-officer-rights: "<red>Only officers and the leader may manage invites.</red>"
+    invite-queue-full: "<red><player> already has the maximum number of pending invites.</red>"
+    invite-rate-limited: "<gray>You can send another invite in <detail>s.</gray>"
+    invite-not-found: "<red>No pending invite for <player> to cancel.</red>"
+  accept:
+    # decline shares these keys: the action is the same from the player's view.
+    ok: "<green>Done.</green>"
+    no-invite: '<gray>No pending invite matches (accept \<team-name> when several are pending).</gray>'
+    invite-not-found: "<red>That team has no open invite for you.</red>"
+    team-full: "<red>The team <detail> is full.</red>"
+    already-in-team: "<red>You are already in a team.</red>"
+  kick:
+    usage: '<red>Usage: /team kick \<player></red>'
+    ok: "<green><player> was removed from the team.</green>"
+    cant-target-self: "<red>Use /team leave instead.</red>"
+    target-not-member: "<red><player> is not in your team.</red>"
+    cant-target-leader: "<red>The team leader cannot be kicked.</red>"
+    no-officer-rights: "<red>Only officers and the leader may kick members.</red>"
+    no-leader-rights: "<red>Only the leader may kick officers.</red>"
+  leave:
+    # disband shares these keys: leaving and disbanding are both exits, and
+    # the leader-gate text is deliberately identical.
+    ok: "<green>Done.</green>"
+    no-leader-rights: "<red>Only the team leader may do that.</red>"
+  rename:
+    ok: "<green>Team renamed.</green>"
+    no-leader-rights: "<red>Only the team leader may rename the team.</red>"
+    rename-cooldown: "<gray>The team can be renamed again in <detail>s.</gray>"
+  rank:
+    # promote, demote and transfer share this section; the usage lines differ.
+    promote-usage: '<red>Usage: /team promote \<player></red>'
+    demote-usage: '<red>Usage: /team demote \<player></red>'
+    transfer-usage: '<red>Usage: /team transfer \<player></red>'
+    ok: "<green>Rank updated for <player>.</green>"
+    no-leader-rights: "<red>Only the team leader may change ranks.</red>"
+    cant-target-self: "<red>You cannot target yourself here.</red>"
+    target-not-member: "<red><player> is not in your team.</red>"
+    cant-target-leader: "<red>The leader's rank changes only via /team transfer.</red>"
+    already-officer: "<gray><player> is already an officer.</gray>"
+    target-not-officer: "<gray><player> is not an officer.</gray>"
+  friendlyfire:
+    usage: '<red>Usage: /team friendlyfire \<on|off></red>'
+    ok: "<green>Friendly fire setting applied.</green>"
+    no-leader-rights: "<red>Only the team leader may change friendly fire.</red>"
+  relation:
+    usage: '<red>Usage: /team \<relation> \<team-name></red>'
+    ok: "<green>Diplomacy updated: <detail> is now <relation>.</green>"
+    no-leader-rights: "<red>Only the team leader may set diplomacy.</red>"
+    team-not-found: "<red>No team with that name.</red>"
+    relation-own-team: "<red>Your team cannot set a relation with itself.</red>"
+
+info:
+  unavailable: "<red>Team data is unavailable right now. Nothing was changed.</red>"
+  header: "<gold>Team <name></gold>"
+  summary: "<gray>members <count>, friendly fire <fire>, created <created></gray>"
+  fire-on: "<red>on</red>"
+  fire-off: "<green>off</green>"
+  member-line: "<gray>-</gray> <white><name></white><rank>"
+  rank-leader: " <gold>[leader]</gold>"
+  rank-officer: " <yellow>[officer]</yellow>"
+  relations-line: "<gray>relations: <relations></gray>"
+
+invites:
+  unavailable: "<red>Invite data is unavailable right now.</red>"
+  none: "<gray>You have no pending invites.</gray>"
+  header: "<gold>Pending invites</gold>"
+  line: "<gray>-</gray> <white><team></white> <gray>(expires in <minutes>m)</gray>"
+
+history:
+  unavailable: "<red>History is unavailable right now.</red>"
+  none: "<gray>No team history to show (you are teamless).</gray>"
+  header: "<gold>Team management history (latest 30)</gold>"
+  line: "<gray><date></gray> <white><action></white> <gray>by <actor> <detail></gray>"
+
+chat:
+  player-only: "<red>Chat channels are player-only.</red>"
+  usage: '<red>Usage: /chat \<global|team|proximity></red>'
+  need-team: '<red>You need a team to use team chat (create one with /team create).</red>'
+  proximity-disabled: "<red>The proximity channel is disabled on this server.</red>"
+  unknown-channel: "<red>Unknown channel. Use global, team or proximity.</red>"
+  switched-team: "<green>Chat channel: team (messages go to your online teammates).</green>"
+  switched-proximity: "<green>Chat channel: proximity (messages go to players within <radius> blocks).</green>"
+  switched-global: "<green>Chat channel: global.</green>"
+  rate-limited: "<red>You are sending chat messages too quickly.</red>"
+  # Channel formats: <sender> and <message> are live Components filled per
+  # message. The renderer is a pure function of these two placeholders.
+  team-format: "<aqua>[Team] </aqua><sender>: <message>"
+  proximity-format: '<white>\<</white><sender><white>> </white><message>'

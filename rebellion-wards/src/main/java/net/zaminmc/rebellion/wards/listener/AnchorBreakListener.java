@@ -3,7 +3,8 @@ package net.zaminmc.rebellion.wards.listener;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
-import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.zaminmc.rebellion.api.messages.MessageCatalog;
 import net.zaminmc.rebellion.wards.Ward;
 import net.zaminmc.rebellion.wards.WardService;
 import net.zaminmc.rebellion.wards.WardsConfig;
@@ -33,20 +34,23 @@ import org.jetbrains.annotations.NotNull;
  *
  * <p>The breaker receives honest async feedback that they destroyed a named
  * ward: the intel is fair (the ward is gone), and no positions are
- * revealed.</p>
+ * revealed. The notice renders through the module's messages.yml catalog
+ * (ADR-0012); the ward name arrives as a placeholder, so it can never
+ * inject MiniMessage tags.</p>
  */
 public final class AnchorBreakListener implements Listener {
-
-    private static final MiniMessage MINI = MiniMessage.miniMessage();
 
     private final Plugin plugin;
     private final WardService service;
     private final WardsConfig config;
+    private final MessageCatalog messages;
 
-    public AnchorBreakListener(Plugin plugin, WardService service, WardsConfig config) {
+    public AnchorBreakListener(Plugin plugin, WardService service, WardsConfig config,
+            MessageCatalog messages) {
         this.plugin = plugin;
         this.service = service;
         this.config = config;
+        this.messages = messages;
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -55,10 +59,8 @@ public final class AnchorBreakListener implements Listener {
         removeIfAnchor(event.getBlock(), removed -> {
             // Persistence callback thread -> hop to main for messaging.
             plugin.getServer().getScheduler().runTask(plugin, () ->
-                    breaker.sendMessage(MINI.deserialize(
-                            "<gray>You broke the anchor of watch ward '</gray><aqua>"
-                            + escape(removed.name())
-                            + "<gray>'. The ward is gone.</gray>")));
+                    breaker.sendMessage(messages.msg("anchor.broken",
+                            Placeholder.unparsed("ward", removed.name() == null ? "" : removed.name()))));
         });
     }
 
@@ -107,9 +109,5 @@ public final class AnchorBreakListener implements Listener {
     private boolean isAnchor(Block block) {
         Material anchor = Material.matchMaterial(config.anchorMaterial());
         return block.getType() == anchor;
-    }
-
-    private static String escape(String value) {
-        return value == null ? "" : value.replace("<", "").replace(">", "");
     }
 }

@@ -9,19 +9,23 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import net.zaminmc.rebellion.api.messages.MessageCatalog;
 import net.zaminmc.rebellion.api.teams.TeamAffiliationService;
 import net.zaminmc.rebellion.wards.Ward;
 import net.zaminmc.rebellion.wards.WardType;
 import net.zaminmc.rebellion.wards.WardsConfig;
 import net.zaminmc.rebellion.wards.WardsConfig.AlertChannel;
+import net.zaminmc.rebellion.wards.WardsPlugin;
 import net.zaminmc.rebellion.wards.detect.AlertDecision;
 import net.zaminmc.rebellion.wards.distance.DistanceService;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 
 /**
  * {@link AlertRouter} decision logic: channel routing (team/owner/both,
- * owner fallback) and template rendering (calibrated vs uncalibrated
- * distance, decoy label, name escaping). Pure statics — no server needed.
+ * owner fallback) and template rendering through the module's real bundled
+ * messages.yml (calibrated vs uncalibrated distance, decoy label, name
+ * placeholder safety). Pure statics — no server needed.
  */
 class AlertRouterTest {
 
@@ -30,6 +34,22 @@ class AlertRouterTest {
     private final UUID teammate = UUID.randomUUID();
     private final UUID teamId = UUID.randomUUID();
     private final UUID intruder = UUID.randomUUID();
+
+    /** The real bundled catalog — the tests assert the shipped templates. */
+    private static MessageCatalog catalog() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        try (var in = WardsPlugin.class.getResourceAsStream("/messages.yml")) {
+            yaml.loadFromString(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+        return MessageCatalog.parse(yaml).catalog();
+    }
+
+    private static String plain(net.kyori.adventure.text.Component c) {
+        return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+                .plainText().serialize(c);
+    }
 
     private WardsConfig config(AlertChannel channel) {
         return new WardsConfig("LODESTONE", 6, 16.0, 256.0, 3, 12, 2000,
@@ -120,7 +140,7 @@ class AlertRouterTest {
     void enterMessageCarriesNameWardAndUncalibratedDistance() {
         DistanceService blocks = new DistanceService(config(AlertChannel.TEAM));
         AlertDecision alert = AlertDecision.enter(teamWard(), intruder, 2400);
-        String text = AlertRouter.renderText(alert, blocks, id -> "Steve");
+        String text = plain(AlertRouter.renderText(alert, blocks, id -> "Steve", catalog()));
         assertTrue(text.contains("Steve"), text);
         assertTrue(text.contains("north"), text);
         assertTrue(text.contains("2400 blocks"), "uncalibrated distance: " + text);
@@ -134,7 +154,7 @@ class AlertRouterTest {
                 AlertChannel.TEAM, 300, true, Map.of(WORLD, 1000.0), "blocks", false);
         DistanceService km = new DistanceService(calibrated);
         AlertDecision alert = AlertDecision.enter(teamWard(), intruder, 2400);
-        String text = AlertRouter.renderText(alert, km, id -> "Alex");
+        String text = plain(AlertRouter.renderText(alert, km, id -> "Alex", catalog()));
         assertTrue(text.contains("2.4 km"), "the master prompt's example: " + text);
     }
 
@@ -144,31 +164,29 @@ class AlertRouterTest {
         Ward decoy = new Ward(UUID.randomUUID(), "fake", owner, Optional.of(teamId),
                 WORLD, 0, 64, 0, 64, WardType.DECOY, true, 0L);
 
-        String enter = AlertRouter.renderText(AlertDecision.enter(decoy, intruder, 10),
-                blocks, id -> "Steve");
+        String enter = plain(AlertRouter.renderText(AlertDecision.enter(decoy, intruder, 10),
+                blocks, id -> "Steve", catalog()));
         assertTrue(enter.contains("decoy"), enter);
 
-        String leave = AlertRouter.renderText(AlertDecision.leave(decoy, intruder),
-                blocks, id -> "Steve");
+        String leave = plain(AlertRouter.renderText(AlertDecision.leave(decoy, intruder),
+                blocks, id -> "Steve", catalog()));
         assertTrue(leave.contains("left the radius"), leave);
         assertFalse(leave.contains("blocks"), "leave has no distance: " + leave);
     }
 
     @Test
-    void namesAreEscapedAgainstMiniMessageInjection() {
+    void namesAreSafeAgainstMiniMessageInjection() {
         DistanceService blocks = new DistanceService(config(AlertChannel.TEAM));
         AlertDecision alert = AlertDecision.enter(teamWard(), intruder, 10);
-        String hostile = AlertRouter.renderText(alert, blocks,
-                id -> "<red>Evil<click:run_command:'/kill'>");
-
-        // Stripping < and > removes every tag opener, so MiniMessage can only
-        // ever see the sanitized text - prove it on the parsed component.
-        net.kyori.adventure.text.Component rendered =
-                net.kyori.adventure.text.minimessage.MiniMessage.miniMessage()
-                        .deserialize(hostile);
+        // The name is inserted as an unparsed placeholder: tags and click
+        // events are structurally impossible, not stripped — prove it on the
+        // rendered component.
+        net.kyori.adventure.text.Component rendered = AlertRouter.renderText(alert, blocks,
+                id -> "<red>Evil<click:run_command:'/kill'>", catalog());
         assertNoClickEvents(rendered);
-        assertTrue(hostile.contains("Evil"), "the plain name survives");
-        assertTrue(rendered.children().size() > 0, "template tags still render");
+        assertTrue(plain(rendered).contains("Evil"), "the plain name survives");
+        assertTrue(plain(rendered).contains("is approaching"),
+                "template tags still render: " + plain(rendered));
     }
 
     private static void assertNoClickEvents(net.kyori.adventure.text.Component component) {
@@ -183,7 +201,7 @@ class AlertRouterTest {
     void offlineIntruderRendersAsSomeone() {
         DistanceService blocks = new DistanceService(config(AlertChannel.TEAM));
         AlertDecision alert = AlertDecision.enter(teamWard(), intruder, 10);
-        String text = AlertRouter.renderText(alert, blocks, id -> null);
+        String text = plain(AlertRouter.renderText(alert, blocks, id -> null, catalog()));
         assertTrue(text.contains("someone"), text);
     }
 }

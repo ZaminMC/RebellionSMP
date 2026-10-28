@@ -1,0 +1,99 @@
+# RebellionWards messages. MiniMessage; every tag explicitly closed (the
+# loader validates this). Placeholders like <player> / <ward> are filled by
+# code at render time. Literal angle brackets escape only the opening
+# bracket: \<name> — MiniMessage has no \> escape (verified against
+# adventure-text-minimessage 5.2.0).
+#
+# Outcome keys are deterministic: ward.<action>.<outcome> with the WardOutcome
+# enum name lowercased and underscores as dashes (ward.create.ok,
+# ward.remove.not-found). Wards report information only; they never protect
+# land — keep that promise in every text.
+
+prefix: "<gradient:#c0392b:#8e44ad>Rebellion</gradient> <dark_gray>»</dark_gray> <gray></gray>"
+
+common:
+  no-permission: "<red>You do not have permission to do that.</red>"
+  unavailable: "<red>That action is unavailable right now; nothing was changed. Please try again in a moment.</red>"
+  unexpected: "<red>The action failed with an unexpected result (<outcome>).</red>"
+
+usage: '<gray>Usage: /ward \<create|remove|toggle|list|info> — watch wards report approaching outsiders; they never protect land.</gray>'
+player-only: "<red>Ward commands are player-only.</red>"
+
+ward:
+  create:
+    usage: '<red>Usage: /ward create \<name> \<radius></red>'
+    usage-decoy: '<red>Usage: /ward create \<name> \<radius> [decoy]</red>'
+    radius-not-a-number: "<red>Radius must be a number between <min> and <max>.</red>"
+    no-anchor: "<red>Target a placed <material> block (within <reach> blocks) to bind the ward.</red>"
+    ok: "<green>Watch ward '<ward>' created and active.</green>"
+    name-invalid: "<red>Ward names are 3-24 chars of letters, digits, underscore or hyphen.</red>"
+    name-taken: "<red>You already have a ward with that name.</red>"
+    radius-invalid: "<red>Radius must be between <detail> blocks.</red>"
+    player-cap: "<red>You reached your ward cap of <detail>. Remove one first.</red>"
+    team-cap: "<red>Your team reached its ward cap of <detail>.</red>"
+    global-cap: "<red>The server reached its global ward cap of <detail>.</red>"
+    anchor-taken: "<red>That anchor block already carries a ward.</red>"
+    anchor-invalid: "<red>That anchor block cannot carry a ward here.</red>"
+    decoys-disabled: "<red>Decoy wards are disabled on this server.</red>"
+  remove:
+    usage: '<red>Usage: /ward remove \<name></red>'
+    ok: "<green>Watch ward '<ward>' removed.</green>"
+    not-found: "<gray>That ward no longer exists.</gray>"
+    no-rights: "<red>Only the ward owner or a team manager can do that.</red>"
+  toggle:
+    usage: '<red>Usage: /ward toggle \<name></red>'
+    # OK has two renderings; the command picks by the ward's pre-mutation state.
+    reactivated: "<green>Watch ward '<ward>' reactivated.</green>"
+    deactivated: "<green>Watch ward '<ward>' deactivated.</green>"
+    not-found: "<gray>That ward no longer exists.</gray>"
+    no-rights: "<red>Only the ward owner or a team manager can do that.</red>"
+
+no-such-ward: "<gray>No ward of yours or your team is named '<name>'.</gray>"
+list:
+  empty: '<gray>You have no watch wards. Create one with /ward create \<name> \<radius> at a placed <material>.</gray>'
+  header: "<gray>Your watch wards (<count>):</gray>"
+  line: "<gray>• '</gray><aqua><ward></aqua><gray>'</gray> <state><decoy> <gray>- r<radius>, <where></gray>"
+  different-world: "different world"
+
+state:
+  active: "<green>active</green>"
+  inactive: "<red>inactive</red>"
+  decoy-tag: " <yellow>(decoy)</yellow>"
+
+info:
+  usage: '<red>Usage: /ward info \<name></red>'
+  header: "<gray>Watch ward '</gray><aqua><ward></aqua><gray>'</gray>"
+  type-line: "<gray>Type:</gray> <type> <gray>| Status:</gray> <status>"
+  type-ward: "<white>ward</white>"
+  type-decoy: "<yellow>decoy</yellow>"
+  geometry: "<gray>Radius:</gray> <white><radius> blocks</white> <gray>| World:</gray> <white><world></white> <gray>| Anchor:</gray> <white><x>, <y>, <z></white>"
+  insiders: "<gray>Reported outsiders inside:</gray> <white><count></white>"
+  no-protection: "<gray>Wards report approaching outsiders only - they do not protect this area.</gray>"
+
+admin:
+  usage: '<gray>Usage: /wardadmin \<list [player]|remove \<id>|mask \<player> \<seconds>></gray>'
+  not-online: "<red>That player is not online (name filters resolve online players only).</red>"
+  list-header: "<gray>Watch wards on this server (<count>):</gray>"
+  list-line: "<gray>• <id> '</gray><aqua><ward></aqua><gray>' r<radius> </gray><state><decoy><gray> @ <world> <x>,<y>,<z></gray>"
+  remove-usage: '<red>Usage: /wardadmin remove \<ward-id></red>'
+  not-an-id: "<red>That is not a ward id.</red>"
+  adminremove:
+    ok: "<green>Watch ward '<ward>' removed.</green>"
+    not-found: "<gray>No ward with that id exists.</gray>"
+  mask:
+    usage: '<red>Usage: /wardadmin mask \<player> \<seconds></red>'
+    disabled: "<red>Masking countermeasures are disabled in the wards config.</red>"
+    not-online: "<red>That player is not online.</red>"
+    seconds-invalid: "<red>Seconds must be a number.</red>"
+    seconds-range: "<red>Seconds must be between 1 and 86400.</red>"
+    granted: "<green>Granted <seconds>s of ward masking to <player>.</green>"
+    granted-target: "<gray>You are masked from watch ward detection for <seconds> seconds.</gray>"
+
+alert:
+  enter: "<gray>[Ward]</gray> <yellow><player></yellow> is approaching <aqua><ward></aqua><decoy> from <green><distance></green> away."
+  leave: "<gray>[Ward]</gray> <yellow><player></yellow> left the radius of <aqua><ward></aqua><decoy>."
+  decoy-tag: " <gray>(decoy)</gray>"
+  unknown-player: "someone"
+
+anchor:
+  broken: "<gray>You broke the anchor of watch ward '</gray><aqua><ward></aqua><gray>'. The ward is gone.</gray>"

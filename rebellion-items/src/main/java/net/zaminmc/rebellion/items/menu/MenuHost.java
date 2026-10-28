@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.zaminmc.rebellion.api.messages.MessageCatalog;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -34,14 +35,17 @@ public final class MenuHost implements InventoryHolder, MenuSubject {
     private final Inventory inventory;
     private final Player player;
     private final boolean consoleActionsAllowed;
+    private final MessageCatalog messages;
     private final Logger logger;
 
     /** Creates the host and renders the visible items (view requirements applied). */
-    public MenuHost(MenuSpec spec, Player player, boolean consoleActionsAllowed, Logger logger) {
+    public MenuHost(MenuSpec spec, Player player, boolean consoleActionsAllowed,
+            MessageCatalog messages, Logger logger) {
         this.spec = spec;
         this.bySlot = spec.bySlot();
         this.player = player;
         this.consoleActionsAllowed = consoleActionsAllowed;
+        this.messages = messages;
         this.logger = logger;
         this.inventory = Bukkit.createInventory(this, spec.size(),
                 MINI.deserialize(spec.title()));
@@ -163,14 +167,18 @@ public final class MenuHost implements InventoryHolder, MenuSubject {
     public void runConsoleCommand(String command) {
         // Double gate: config flag AND per-player permission. Menu YAML is
         // admin-controlled, but this path must stay deliberate (master prompt §9).
+        // The player gets the configured notice on refusal: a silently dead
+        // button reads as a bug (ADR-0012 honest feedback).
         if (!consoleActionsAllowed) {
             logger.warning("Menu requested console action but allow-console-actions is false: "
                     + command);
+            player.sendMessage(messages.msg("menu.console-denied"));
             return;
         }
         if (!player.hasPermission("rebellion.items.admin.menuconsole")) {
             logger.warning(() -> "Player " + player.getName()
                     + " triggered a console menu action without menuconsole permission");
+            player.sendMessage(messages.msg("common.no-permission"));
             return;
         }
         String withoutSlash = command.startsWith("/") ? command.substring(1) : command;

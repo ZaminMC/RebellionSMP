@@ -93,7 +93,8 @@ public final class RebellionItemsPlugin extends JavaPlugin {
         // Dynamic per-menu open_command registration (Paper CommandMap API).
         // The opener resolves the live spec at execution time, so menu reloads
         // take effect without re-registering commands.
-        menuCommands = new MenuCommandBridge(logger, (player, menuId) -> openMenuFor(player, menuId));
+        menuCommands = new MenuCommandBridge(logger, (player, menuId) -> openMenuFor(player, menuId),
+                state::messages);
         ItemsCommand executor = new ItemsCommand(state, modules, menuCommands, logger);
         items.setExecutor(executor);
         items.setTabCompleter(executor);
@@ -134,7 +135,7 @@ public final class RebellionItemsPlugin extends JavaPlugin {
             return false;
         }
         new MenuHost(spec, player, state.config().allowConsoleActions(),
-                getLogger()).open();
+                state.messages(), getLogger()).open();
         return true;
     }
 }

@@ -91,6 +91,26 @@ reported with an incident ID) → pool closed → services unregistered.
    `database.yml` is validated but intentionally not re-applied (restart
    required — documented in-game).
 
+### Messages (ADR-0012)
+
+- One shared `MessageCatalog` lives in rebellion-api — the only module every
+  feature module compiles against — and owns extraction, admin-edit merging,
+  strict MiniMessage validation and rendering. `CoreMessages` is a thin
+  adapter over it (its public surface is unchanged).
+- Every module ships a bundled `messages.yml`, extracted into its data folder
+  on first boot and never overwritten afterwards. Player feedback, listing
+  lines, alerts, chat channel formats and the anchor-break notice all render
+  through the module's catalog; dynamic values arrive as placeholders
+  (`Placeholder.unparsed`/`component`), never as concatenated MiniMessage.
+- Key scheme: `team.<action>.<outcome>` / `ward.<action>.<outcome>` (enum
+  kebab-case); shared texts (`not-in-team`, `common.unavailable`) hoisted to
+  the top level. Per-module coverage tests pin every rendered key.
+- Load semantics (boot + module reloads): per-key fallback to bundled
+  defaults with precise warnings; unreadable file = enable failure. Core's
+  `/rebellion reload` keeps reject-whole-candidate parse semantics.
+- MiniMessage escaping: literal `<` is `\<`; there is no `\>` escape
+  (verified against adventure-text-minimessage 5.2.0).
+
 ## Persistence design
 
 - One HikariCP pool (shaded + relocated into RebellionCore) and one **bounded**

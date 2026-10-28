@@ -588,3 +588,99 @@ green (verified with `./gradlew test --rerun-tasks` before any change).
   dragons controller slice + wiring.
 - Serverless fallback: Phase 6 groundwork — ADR-0012 dimension-artifact
   state machine schema.
+
+## 2026-10-28 — Session 8: module message catalogs (ADR-0012) — every module's player feedback now renders through messages.yml
+
+**Context**
+
+- Session 7's documented next task, step 2: "wire feature-module messages.yml
+  via the Core messages pattern + re-run boot smoke". Items/Teams/Wards had
+  hard-coded feedback strings; Items even bundled a messages.yml nothing
+  read. Step 1 (verify dev.3 published) confirmed first: prerelease
+  v0.1.0-dev.3 is on GitHub with the five fixed jars, authored as Abasing.
+- Baseline before any change: `./gradlew build` green (289 tests); master
+  prompt re-read from remote, unchanged (615 lines, md5 match); develop
+  pulled to the pipeline's `b3d1d3c` bump commit.
+
+**Implemented (ADR-0012)**
+
+- `MessageCatalog` in rebellion-api (`api.messages`): one shared
+  implementation of extraction (bundled → data folder, no clobber),
+  admin-edit merge (user wins; missing keys → bundled default + warning;
+  invalid template → per-key bundled-default fallback + precise warning),
+  strict closed-tag validation with the bare-placeholder catch-all, and
+  MiniMessage rendering (`raw`/`msg`/`prefix`/`template`). Resource names
+  are traversal-guarded. Core's `CoreMessages` became a thin adapter over
+  it — public surface and call sites unchanged.
+- Feature-module wiring: RebellionItems (ItemsModuleState loads messages
+  with everything else; reload applies them atomically),
+  RebellionTeams (enable-time load; TeamCommand/ChatCommand/ChatListener),
+  RebellionWards (enable-time load; WardCommand/WardAdminCommand/
+  AlertRouter/AnchorBreakListener). Items' bundled file extended to the
+  full key set; Teams and Wards gained bundled messages.yml files.
+- Deterministic outcome keys `team.<action>.<outcome>` /
+  `ward.<action>.<outcome>` (enum kebab-case); shared texts hoisted
+  (`not-in-team`, `name-invalid`, `common.unavailable` for DB failures).
+  All dynamic values now travel as `Placeholder.unparsed`/`component` —
+  tag/click-event injection is structurally impossible; the old
+  angle-bracket-stripping `escape()` helpers are gone. Chat channel
+  formats are templates over `<sender>`/`<message>`.
+- Two latent rendering defects found + fixed during the migration: wards
+  `list.empty` shipped HTML entities that rendered literally in game
+  ("&lt;name&gt;"), and `admin.list-line` carried an unclosed `<gray>`
+  that lenient MiniMessage had masked. New MiniMessage knowledge recorded:
+  `\<` escapes a literal opening bracket; there is NO `\>` escape (the
+  backslash stays literal) — verified against adventure-text-minimessage
+  5.2.0 and pinned in MessageCatalogTest.
+
+**Evidence**
+
+- Tests: 307 green (api 8, core 44, items 91, teams 50, wards 86, dragons
+  28), stable across `./gradlew test --rerun-tasks`. New:
+  MessageCatalogTest (8, API), ItemsMessagesTest (3), TeamsMessagesTest (4),
+  WardsMessagesTest (3) — the per-module tests strict-parse each shipped
+  file and pin every rendered key + every (action, outcome) pair, so
+  code/yml drift fails the build, not the game. Teams key-coverage test
+  caught a real key mismatch (create-cooldown) during development; wards
+  coverage caught the unclosed `<gray>`.
+- Live boot smoke on Paper 26.3 build 226 (fresh `build/paper-smoke`):
+  all five modules enable; messages.yml extracted ×4 on first boot;
+  console feedback renders through the catalogs (`rebellionitems status`,
+  `wardadmin list`, console `team` → prefixed player-only notice); an
+  admin edit of `status.header` applied live via `/rebellionitems reload`;
+  a deliberately unclosed template produced the precise WARN
+  ("status.header: invalid MiniMessage … using bundled default") while
+  the module stayed operational and the bundled default rendered;
+  restart kept the admin file byte-identical (md5) with no re-extraction;
+  graceful stop. Full checklist in docs/TEST_PLAN.md.
+
+**Artifacts**
+
+- RebellionAPI/Core/Items/Teams/Wards jars rebuilt (v0.1.0-dev.3 stamps);
+  install order unchanged; no new module.
+
+**Persistence/config**
+
+- No schema changes. New per-module `messages.yml` files extract on first
+  boot. Items reloads messages with its `/rebellionitems reload`;
+  Teams/Wards messages load at enable only (restart to apply message
+  edits there — documented in CONFIGURATION.md).
+
+**Honest limitations**
+
+- Rendering verified at the console surface; a player has still never
+  joined the smoke server — menus, invites, ward alerts delivered to real
+  players and the chat formats in actual chat remain part of the
+  documented interactive pass.
+- The dragons module still has no plugin wiring (unchanged; gated on
+  ADR-0008 live experiments).
+- Session 7's roadmap note reserved "ADR-0012" for the artifact state
+  machine; that work is renumbered to ADR-0013, not dropped.
+
+**Next task**
+
+- Phase 5 remaining: run the five ADR-0008 live dragon experiments
+  (interactive; the harness now exists to host them), then the dragons
+  controller slice + plugin wiring. Serverless fallback: Phase 6
+  groundwork — the dimension-artifact state machine (now ADR-0013) in the
+  tested style of ADR-0009.

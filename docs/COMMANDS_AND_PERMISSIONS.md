@@ -3,6 +3,17 @@
 Current command surface (RebellionCore). Feature modules add their own
 namespaced commands when they exist; this file is the single source of truth.
 
+## Player feedback contract (ADR-0012)
+
+Every command's user-facing text renders through its module's `messages.yml`
+(see docs/CONFIGURATION.md, "Messages contract"). Outcome messages use
+deterministic keys — `team.<action>.<outcome>` / `ward.<action>.<outcome>`
+with the outcome enum in kebab-case (e.g. `team.kick.cant-target-leader`,
+`ward.create.decoys-disabled`) — so an admin can locate and reword any
+message without touching code. One-shot feedback carries the configured
+`prefix`; data lines in listings do not. Dynamic values (names, ids,
+distances) are placeholders, so they can never inject formatting.
+
 ## /rebellion
 
 | Subcommand | Permission | Console? | Behavior |

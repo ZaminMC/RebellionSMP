@@ -1,13 +1,15 @@
 package net.zaminmc.rebellion.teams.listener;
 
+import io.papermc.paper.chat.ChatRenderer;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.zaminmc.rebellion.api.messages.MessageCatalog;
 import net.zaminmc.rebellion.teams.TeamService;
 import net.zaminmc.rebellion.teams.chat.ChatRouter;
 import net.zaminmc.rebellion.teams.chat.ChatTracker;
@@ -26,17 +28,20 @@ import org.bukkit.event.Listener;
  * radius. Both non-global channels are rate limited per player. Team and
  * proximity messages are visible to their recipient players only (the
  * console viewer is removed — the server still logs chat through its own
- * pipeline).</p>
+ * pipeline). Channel formats and the rate-limit notice render through the
+ * module's messages.yml catalog (ADR-0012).</p>
  */
 public final class ChatListener implements Listener {
 
     private final TeamService service;
     private final ChatTracker chat;
+    private final MessageCatalog messages;
     private final Logger logger;
 
-    public ChatListener(TeamService service, ChatTracker chat, Logger logger) {
+    public ChatListener(TeamService service, ChatTracker chat, MessageCatalog messages, Logger logger) {
         this.service = service;
         this.chat = chat;
+        this.messages = messages;
         this.logger = logger;
     }
 
@@ -62,7 +67,7 @@ public final class ChatListener implements Listener {
                 service.cache().onlineTeammates(senderId));
         event.viewers().removeIf(audience -> !(audience instanceof Player player
                 && recipients.contains(player.getUniqueId())));
-        event.renderer(ChatListener::teamRenderer);
+        event.renderer(teamRenderer());
     }
 
     private void routeProximity(AsyncChatEvent event, UUID senderId) {
@@ -86,7 +91,7 @@ public final class ChatListener implements Listener {
                 service.config().proximityRadius());
         event.viewers().removeIf(audience -> !(audience instanceof Player player
                 && recipients.contains(player.getUniqueId())));
-        event.renderer(ChatListener::proximityRenderer);
+        event.renderer(proximityRenderer());
     }
 
     /** @return true when the message may proceed; cancels + notifies otherwise. */
@@ -95,24 +100,29 @@ public final class ChatListener implements Listener {
             return true;
         }
         event.setCancelled(true);
-        event.getPlayer().sendMessage(Component.text(
-                "You are sending chat messages too quickly.", NamedTextColor.RED));
+        event.getPlayer().sendMessage(messages.msg("chat.rate-limited"));
         return false;
     }
 
-    private static Component teamRenderer(Object source, Component senderDisplayName,
-            Component message, Object viewer) {
-        return Component.text("[Team] ", NamedTextColor.AQUA)
-                .append(senderDisplayName)
-                .append(Component.text(": "))
-                .append(message);
+    private ChatRenderer teamRenderer() {
+        return renderWith("chat.team-format");
     }
 
-    private static Component proximityRenderer(Object source, Component senderDisplayName,
-            Component message, Object viewer) {
-        return Component.text("<", NamedTextColor.WHITE)
-                .append(senderDisplayName)
-                .append(Component.text("> "))
-                .append(message);
+    private ChatRenderer proximityRenderer() {
+        return renderWith("chat.proximity-format");
+    }
+
+    /**
+     * Builds a renderer over the configured format template. The format is
+     * deserialized per message — chat is rate-gated and low volume, and the
+     * live sender/message Components must be resolved through placeholders,
+     * not baked into a pre-rendered component.
+     */
+    private ChatRenderer renderWith(String formatKey) {
+        String template = messages.template(formatKey);
+        return (source, senderDisplayName, message, viewer) ->
+                MiniMessage.miniMessage().deserialize(template,
+                        Placeholder.component("sender", senderDisplayName),
+                        Placeholder.component("message", message));
     }
 }

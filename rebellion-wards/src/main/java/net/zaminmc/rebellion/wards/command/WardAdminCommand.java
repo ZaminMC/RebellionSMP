@@ -3,13 +3,15 @@ package net.zaminmc.rebellion.wards.command;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.zaminmc.rebellion.api.messages.MessageCatalog;
 import net.zaminmc.rebellion.wards.Ward;
 import net.zaminmc.rebellion.wards.WardOutcome;
 import net.zaminmc.rebellion.wards.WardResult;
+import net.zaminmc.rebellion.wards.WardType;
 import net.zaminmc.rebellion.wards.WardService;
 import net.zaminmc.rebellion.wards.WardsConfig;
 import net.zaminmc.rebellion.wards.alert.TimedMasking;
@@ -31,27 +33,30 @@ import org.jetbrains.annotations.NotNull;
  *       ONLINE player (counter-ritual preview + support tool; the UUID comes
  *       from the live Player object, never the name).</li>
  * </ul>
+ *
+ * <p>All feedback renders through the module's messages.yml catalog
+ * (ADR-0012); names, ids and numbers arrive as placeholders.</p>
  */
 public final class WardAdminCommand implements CommandExecutor, TabCompleter {
-
-    private static final MiniMessage MINI = MiniMessage.miniMessage();
 
     private final WardService service;
     private final WardsConfig config;
     private final TimedMasking timedMasking;
+    private final MessageCatalog messages;
 
-    public WardAdminCommand(WardService service, WardsConfig config, TimedMasking timedMasking) {
+    public WardAdminCommand(WardService service, WardsConfig config, TimedMasking timedMasking,
+            MessageCatalog messages) {
         this.service = service;
         this.config = config;
         this.timedMasking = timedMasking;
+        this.messages = messages;
     }
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
-            @NotNull String label, @NotNull String[] args) {
+            @NotNull String label, String[] args) {
         if (!sender.hasPermission("rebellion.wards.admin")) {
-            sender.sendMessage(MINI.deserialize(
-                    "<red>You do not have permission to do that.</red>"));
+            sender.sendMessage(messages.msg("common.no-permission"));
             return true;
         }
         if (args.length == 0) {
@@ -73,104 +78,106 @@ public final class WardAdminCommand implements CommandExecutor, TabCompleter {
         if (args.length >= 2) {
             Player target = sender.getServer().getPlayer(args[1]);
             if (target == null) {
-                sender.sendMessage(MINI.deserialize(
-                        "<red>That player is not online (name filters resolve online "
-                        + "players only).</red>"));
+                sender.sendMessage(messages.msg("admin.not-online",
+                        Placeholder.unparsed("player", args[1])));
                 return;
             }
             UUID owner = target.getUniqueId();
             wards = wards.stream().filter(w -> w.owner().equals(owner)).toList();
         }
-        sender.sendMessage(MINI.deserialize("<gray>Watch wards on this server ("
-                + wards.size() + "):</gray>"));
+        sender.sendMessage(messages.raw("admin.list-header",
+                Placeholder.unparsed("count", String.valueOf(wards.size()))));
         for (Ward ward : wards) {
-            sender.sendMessage(MINI.deserialize("<gray>• " + ward.id() + " '</gray><aqua>"
-                    + escape(ward.name()) + "<gray>' r" + ward.radius() + " "
-                    + (ward.active() ? "<green>active</green>" : "<red>inactive</red>")
-                    + (ward.type() == net.zaminmc.rebellion.wards.WardType.DECOY
-                            ? " <yellow>(decoy)</yellow>" : "")
-                    + " <gray>@ " + escape(ward.world()) + " " + (int) Math.floor(ward.x())
-                    + "," + (int) Math.floor(ward.y()) + "," + (int) Math.floor(ward.z())
-                    + "</gray>"));
+            sender.sendMessage(messages.raw("admin.list-line",
+                    Placeholder.unparsed("id", String.valueOf(ward.id())),
+                    Placeholder.unparsed("ward", ward.name()),
+                    Placeholder.unparsed("radius", String.valueOf(ward.radius())),
+                    Placeholder.component("state", messages.raw(
+                            ward.active() ? "state.active" : "state.inactive")),
+                    Placeholder.component("decoy", ward.type() == WardType.DECOY
+                            ? messages.raw("state.decoy-tag") : Component.empty()),
+                    Placeholder.unparsed("world", ward.world()),
+                    Placeholder.unparsed("x", String.valueOf((int) Math.floor(ward.x()))),
+                    Placeholder.unparsed("y", String.valueOf((int) Math.floor(ward.y()))),
+                    Placeholder.unparsed("z", String.valueOf((int) Math.floor(ward.z())))));
         }
     }
 
     private void remove(CommandSender sender, String[] args) {
         if (args.length < 2) {
-            sender.sendMessage(MINI.deserialize("<red>Usage: /wardadmin remove <ward-id></red>"));
+            sender.sendMessage(messages.msg("admin.remove-usage"));
             return;
         }
         UUID wardId;
         try {
             wardId = UUID.fromString(args[1]);
         } catch (IllegalArgumentException e) {
-            sender.sendMessage(MINI.deserialize("<red>That is not a ward id.</red>"));
+            sender.sendMessage(messages.msg("admin.not-an-id"));
             return;
         }
         CompletableFuture<WardResult> future = service.adminRemove(wardId);
         future.whenComplete((result, err) -> {
             if (err != null) {
-                sender.sendMessage(MINI.deserialize(
-                        "<red>The action is unavailable right now; nothing was changed.</red>"));
+                sender.sendMessage(messages.msg("common.unavailable"));
                 return;
             }
+            // Same deterministic key scheme, under the admin namespace:
+            // admin.adminremove.<outcome> (ADR-0012).
+            String key = switch (result.outcome()) {
+                case OK -> "admin.adminremove.ok";
+                case DB_ERROR -> "common.unavailable";
+                default -> "admin.adminremove."
+                        + result.outcome().name().toLowerCase(Locale.ROOT).replace('_', '-');
+            };
             String detail = result.ward() != null ? result.ward().name() : "";
-            sender.sendMessage(MINI.deserialize(MESSAGES.get(result.outcome())
-                    .replace("{detail}", detail)));
+            sender.sendMessage(messages.msg(key,
+                    Placeholder.unparsed("ward", detail),
+                    Placeholder.unparsed("detail", detail)));
         });
     }
 
     private void mask(CommandSender sender, String[] args) {
         if (args.length < 3) {
-            sender.sendMessage(MINI.deserialize(
-                    "<red>Usage: /wardadmin mask <player> <seconds></red>"));
+            sender.sendMessage(messages.msg("admin.mask.usage"));
             return;
         }
         if (!config.maskingEnabled()) {
-            sender.sendMessage(MINI.deserialize(
-                    "<red>Masking countermeasures are disabled in the wards config.</red>"));
+            sender.sendMessage(messages.msg("admin.mask.disabled"));
             return;
         }
         Player target = sender.getServer().getPlayer(args[1]);
         if (target == null) {
-            sender.sendMessage(MINI.deserialize(
-                    "<red>That player is not online.</red>"));
+            sender.sendMessage(messages.msg("admin.mask.not-online",
+                    Placeholder.unparsed("player", args[1])));
             return;
         }
         long seconds;
         try {
             seconds = Long.parseLong(args[2]);
         } catch (NumberFormatException e) {
-            sender.sendMessage(MINI.deserialize("<red>Seconds must be a number.</red>"));
+            sender.sendMessage(messages.msg("admin.mask.seconds-invalid"));
             return;
         }
         if (seconds < 1 || seconds > 86_400) {
-            sender.sendMessage(MINI.deserialize(
-                    "<red>Seconds must be between 1 and 86400.</red>"));
+            sender.sendMessage(messages.msg("admin.mask.seconds-range"));
             return;
         }
         timedMasking.mask(target.getUniqueId(), System.currentTimeMillis() + seconds * 1000L);
-        sender.sendMessage(MINI.deserialize("<green>Granted " + seconds
-                + "s of ward masking to " + target.getName() + ".</green>"));
-        target.sendMessage(MINI.deserialize(
-                "<gray>You are masked from watch ward detection for " + seconds
-                + " seconds.</gray>"));
+        sender.sendMessage(messages.msg("admin.mask.granted",
+                Placeholder.unparsed("seconds", String.valueOf(seconds)),
+                Placeholder.unparsed("player", target.getName())));
+        target.sendMessage(messages.msg("admin.mask.granted-target",
+                Placeholder.unparsed("seconds", String.valueOf(seconds))));
     }
 
     private boolean usage(CommandSender sender) {
-        sender.sendMessage(MINI.deserialize(
-                "<gray>Usage: /wardadmin <list [player]|remove <id>|mask <player> <seconds>>"
-                + "</gray>"));
+        sender.sendMessage(messages.msg("admin.usage"));
         return true;
-    }
-
-    private static String escape(String value) {
-        return value == null ? "" : value.replace("<", "").replace(">", "");
     }
 
     @Override
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
-            @NotNull String alias, @NotNull String[] args) {
+            @NotNull String alias, String[] args) {
         List<String> completions = new ArrayList<>();
         if (args.length == 1) {
             for (String sub : List.of("list", "remove", "mask")) {
@@ -181,10 +188,4 @@ public final class WardAdminCommand implements CommandExecutor, TabCompleter {
         }
         return completions;
     }
-
-    private static final Map<WardOutcome, String> MESSAGES = Map.ofEntries(
-            Map.entry(WardOutcome.OK, "<green>Watch ward '{detail}' removed.</green>"),
-            Map.entry(WardOutcome.NOT_FOUND, "<gray>No ward with that id exists.</gray>"),
-            Map.entry(WardOutcome.DB_ERROR, "<red>The action is unavailable right now; "
-                    + "nothing was changed.</red>"));
 }

@@ -1,0 +1,14 @@
+# Test fixture for MessageCatalogTest — exercises every contract of the
+# loader: nested sections, a prefix, runtime placeholders and escapes.
+prefix: "<gray>[Test]</gray> "
+
+common:
+  no-permission: "<red>Denied.</red>"
+  # <detail> is filled by code at render time (Placeholder.unparsed).
+  report: "<yellow>Report <detail> to staff.</yellow>"
+
+usage:
+  # Literal angle brackets: escape ONLY the opening bracket (\<). MiniMessage
+  # has no \> escape — a backslash before > stays literal text (verified
+  # against adventure-text-minimessage 5.2.0 in MessageCatalogTest).
+  player: '<red>Usage: /test invite \<player></red>'

@@ -103,6 +103,43 @@ files like `items.yml`, `rarities.yml`, `menus/*.yml` where that improves
 editability). No shared mega-config. An API-only module may omit config if it
 genuinely has no settings — RebellionAPI is that exception today.
 
+## Messages contract (all modules, ADR-0012)
+
+Every module — Core through the newest feature module — renders all
+player-facing feedback through its own extracted `messages.yml` via the
+shared `MessageCatalog` (rebellion-api). The contract is uniform:
+
+- **First boot** extracts the bundled `messages.yml` into the module data
+  folder; admin edits are never overwritten afterwards.
+- **Merge semantics at boot and module reload:** admin values win; missing
+  keys fall back to bundled defaults (reported as warnings); a user template
+  that fails strict closed-tag validation falls back to the bundled default
+  for that key and is reported with the offending key. An unreadable file
+  fails the enable (fail closed, actionable message).
+- **Core's `/rebellion reload` keeps its stricter parse semantics:** any
+  invalid template rejects the whole reload; the previous snapshot stays
+  (unchanged, tested contract).
+- **Outcome keys are deterministic:** `team.<action>.<outcome>` /
+  `ward.<action>.<outcome>` — enum name lowercased, underscores as dashes
+  (e.g. `team.kick.cant-target-leader`, `ward.create.decoys-disabled`).
+  Texts identical across actions share a top-level key (`not-in-team`);
+  infrastructure failures share `common.unavailable`.
+- **Prefix convention:** one-shot feedback (usage, errors, success) renders
+  with the `prefix` key; data lines inside listings render unprefixed — the
+  same convention as Core's `/rebellion` surface.
+- **Placeholders are filled by code** (`<player>`, `<ward>`, `<detail>`,
+  `<sender>`…). Values are inserted as literal text/components, so they can
+  never inject MiniMessage tags or click events.
+- **Literal angle brackets escape only the opening bracket**
+  (`/team invite \<player>`): MiniMessage has `\<` but no `\>` escape
+  (verified against adventure-text-minimessage 5.2.0).
+- **Chat channel formats** (`chat.team-format`, `chat.proximity-format` in
+  RebellionTeams) are templates over `<sender>` / `<message>` component
+  placeholders.
+- **Reload scope:** RebellionItems reloads messages with everything else
+  (`/rebellionitems reload`); Teams and Wards load messages at enable only —
+  message edits there need a restart (documented, deliberate).
+
 ## RebellionWards
 
 Own `config.yml` under `plugins/RebellionWards/`, validated at load with the

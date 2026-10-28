@@ -10,7 +10,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
+import net.zaminmc.rebellion.api.messages.MessageCatalog;
 import org.bukkit.Location;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandMap;
 import org.bukkit.command.CommandSender;
@@ -84,8 +86,17 @@ final class MenuCommandBridgeTest {
     }
 
     private static MenuCommandBridge bridge() {
+        // Minimal fixed catalog: the bridge only renders refusal notices with
+        // it, and the registration logic under test never reaches messages.
+        YamlConfiguration yaml = new YamlConfiguration();
+        try {
+            yaml.loadFromString("prefix: ''\nmenu:\n  player-only: x\n  unavailable: x\ncommon:\n  no-permission: x\n");
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+        MessageCatalog catalog = MessageCatalog.parse(yaml).catalog();
         return new MenuCommandBridge(Logger.getLogger("test"),
-                (player, menuId) -> true);
+                (player, menuId) -> true, () -> catalog);
     }
 
     @Test

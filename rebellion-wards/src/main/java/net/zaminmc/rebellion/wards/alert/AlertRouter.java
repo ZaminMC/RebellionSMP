@@ -5,7 +5,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.zaminmc.rebellion.api.messages.MessageCatalog;
 import net.zaminmc.rebellion.api.teams.TeamAffiliationService;
 import net.zaminmc.rebellion.wards.Ward;
 import net.zaminmc.rebellion.wards.WardsConfig;
@@ -30,30 +31,27 @@ import org.jetbrains.annotations.Nullable;
  *
  * <p>The decision logic — {@link #recipients} and {@link #renderText} — is
  * static and pure so the test suite covers channel routing and rendering
- * without a server.</p>
+ * without a server. Templates come from the module's messages.yml catalog
+ * (ADR-0012): {@code alert.enter} / {@code alert.leave} with
+ * {@code <player> <ward> <decoy> <distance>} placeholders. Names and
+ * distances are inserted as unparsed placeholders, so ward names or player
+ * names can never inject MiniMessage tags or click events.</p>
  */
 public final class AlertRouter {
-
-    private static final MiniMessage MINI = MiniMessage.miniMessage();
-
-    private static final String ENTER_TEMPLATE =
-            "<gray>[Ward]</gray> <yellow>{player}</yellow> is approaching "
-            + "<aqua>{ward}</aqua>{decoy} from <green>{distance}</green> away.";
-    private static final String LEAVE_TEMPLATE =
-            "<gray>[Ward]</gray> <yellow>{player}</yellow> left the radius of "
-            + "<aqua>{ward}</aqua>{decoy}.";
 
     private final Plugin plugin;
     private final WardsConfig config;
     private final DistanceService distances;
+    private final MessageCatalog messages;
     @Nullable
     private final TeamAffiliationService teams;
 
     public AlertRouter(Plugin plugin, WardsConfig config, DistanceService distances,
-            @Nullable TeamAffiliationService teams) {
+            MessageCatalog messages, @Nullable TeamAffiliationService teams) {
         this.plugin = plugin;
         this.config = config;
         this.distances = distances;
+        this.messages = messages;
         this.teams = teams;
     }
 
@@ -77,8 +75,7 @@ public final class AlertRouter {
             return player == null ? null : player.getName();
         };
         for (AlertDecision alert : alerts) {
-            Component message = MINI.deserialize(
-                    renderText(alert, distances, names));
+            Component message = renderText(alert, distances, names, messages);
             for (UUID recipient : recipients(alert.ward(), config, teams)) {
                 Player player = plugin.getServer().getPlayer(recipient);
                 if (player != null) {
@@ -117,25 +114,27 @@ public final class AlertRouter {
         return result;
     }
 
-    /** Fills the alert template; the name resolver is delivery-time and
-     *  server-owned (null renders as "someone" for offline intruders). */
-    static String renderText(@NotNull AlertDecision alert, @NotNull DistanceService distances,
-            @NotNull Function<UUID, String> nameResolver) {
-        String template = alert.kind() == AlertDecision.Kind.ENTER
-                ? ENTER_TEMPLATE : LEAVE_TEMPLATE;
+    /**
+     * Renders one alert through the catalog's {@code alert.enter} /
+     * {@code alert.leave} templates. The name resolver is delivery-time and
+     * server-owned (null renders as the configured {@code alert.unknown-player}
+     * text for offline intruders).
+     */
+    static Component renderText(@NotNull AlertDecision alert, @NotNull DistanceService distances,
+            @NotNull Function<UUID, String> nameResolver, @NotNull MessageCatalog catalog) {
+        String templateKey = alert.kind() == AlertDecision.Kind.ENTER
+                ? "alert.enter" : "alert.leave";
+        String rawName = nameResolver.apply(alert.playerId());
+        String unknown = catalog.template("alert.unknown-player");
         String distance = alert.kind() == AlertDecision.Kind.ENTER
                 ? distances.format(Math.max(0.0, alert.distanceBlocks()), alert.ward().world())
                 : "";
-        String rawName = nameResolver.apply(alert.playerId());
-        return template
-                .replace("{player}", escape(rawName == null ? "someone" : rawName))
-                .replace("{ward}", escape(alert.ward().name()))
-                .replace("{decoy}", alert.decoy() ? " <gray>(decoy)</gray>" : "")
-                .replace("{distance}", distance);
-    }
-
-    /** Neutralizes MiniMessage tag injection (names are pre-validated; belt and braces). */
-    private static String escape(String value) {
-        return value == null ? "" : value.replace("<", "").replace(">", "");
+        return catalog.raw(templateKey,
+                Placeholder.unparsed("player",
+                        rawName == null ? (unknown == null ? "someone" : unknown) : rawName),
+                Placeholder.unparsed("ward", alert.ward().name()),
+                Placeholder.component("decoy", alert.decoy()
+                        ? catalog.raw("alert.decoy-tag") : Component.empty()),
+                Placeholder.unparsed("distance", distance));
     }
 }

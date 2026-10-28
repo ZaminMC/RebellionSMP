@@ -3,12 +3,14 @@ package net.zaminmc.rebellion.wards.command;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
-import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
+import net.zaminmc.rebellion.api.messages.MessageCatalog;
 import net.zaminmc.rebellion.api.teams.TeamAffiliationService;
 import net.zaminmc.rebellion.wards.Ward;
 import net.zaminmc.rebellion.wards.WardOutcome;
@@ -40,35 +42,36 @@ import org.jetbrains.annotations.NotNull;
  *
  * <p>Authority rules: the anchor comes from the live raytrace (never client
  * coordinates), targets resolve through owned-ward name lookup, and every
- * mutation result renders through typed outcome messages — the same
- * contracts the teams command layer established.</p>
+ * mutation result renders through typed outcome messages from the module's
+ * messages.yml catalog (ADR-0012) — {@code ward.<action>.<outcome>} keys;
+ * names and details arrive as placeholders, never as raw MiniMessage.</p>
  */
 public final class WardCommand implements CommandExecutor, TabCompleter {
-
-    private static final MiniMessage MINI = MiniMessage.miniMessage();
 
     private final WardService service;
     private final WardsConfig config;
     private final DistanceService distances;
     private final TeamAffiliationService teams;
+    private final MessageCatalog messages;
 
     public WardCommand(WardService service, WardsConfig config, DistanceService distances,
-            TeamAffiliationService teams) {
+            TeamAffiliationService teams, MessageCatalog messages) {
         this.service = service;
         this.config = config;
         this.distances = distances;
         this.teams = teams;
+        this.messages = messages;
     }
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
-            @NotNull String label, @NotNull String[] args) {
+            @NotNull String label, String[] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(MINI.deserialize("<red>Ward commands are player-only.</red>"));
+            sender.sendMessage(messages.msg("player-only"));
             return true;
         }
         if (!player.hasPermission("rebellion.wards.use")) {
-            send(player, "<red>You do not have permission to do that.</red>");
+            player.sendMessage(messages.msg("common.no-permission"));
             return true;
         }
         if (args.length == 0) {
@@ -76,13 +79,19 @@ public final class WardCommand implements CommandExecutor, TabCompleter {
         }
         switch (args[0].toLowerCase(Locale.ROOT)) {
             case "create" -> create(player, args);
-            case "remove" -> byName(player, args, 1, "Usage: /ward remove <name>",
-                    ward -> done(player, service.remove(player.getUniqueId(), ward.id()),
-                            REMOVE_MESSAGES));
-            case "toggle" -> byName(player, args, 1, "Usage: /ward toggle <name>",
-                    ward -> done(player, service.toggle(player.getUniqueId(), ward.id()),
-                            toggleMessages(ward)));
-            case "info" -> byName(player, args, 1, "Usage: /ward info <name>",
+            case "remove" -> byName(player, args, 1, "ward.remove.usage",
+                    ward -> done(player, "remove",
+                            service.remove(player.getUniqueId(), ward.id()),
+                            "ward.remove.ok", wardResolvers(ward)));
+            case "toggle" -> byName(player, args, 1, "ward.toggle.usage",
+                    // OK has two texts; the ward's pre-mutation state decides which.
+                    ward -> done(player, "toggle",
+                            service.toggle(player.getUniqueId(), ward.id()),
+                            ward.active()
+                                    ? "ward.toggle.deactivated"
+                                    : "ward.toggle.reactivated",
+                            wardResolvers(ward)));
+            case "info" -> byName(player, args, 1, "info.usage",
                     ward -> info(player, ward));
             case "list" -> list(player);
             default -> {
@@ -92,14 +101,21 @@ public final class WardCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
+    private TagResolver[] wardResolvers(Ward ward) {
+        return new TagResolver[]{
+                Placeholder.unparsed("ward", ward.name()),
+                Placeholder.unparsed("detail",
+                        ward.name() == null ? "" : ward.name())};
+    }
+
     // ------------------------------------------------------------------
     // create
     // ------------------------------------------------------------------
 
     private void create(Player player, String[] args) {
         if (args.length < 3) {
-            send(player, "<red>Usage: /ward create <name> <radius>"
-                    + (config.decoysEnabled() ? " [decoy]" : "") + "</red>");
+            player.sendMessage(messages.msg(config.decoysEnabled()
+                    ? "ward.create.usage-decoy" : "ward.create.usage"));
             return;
         }
         String name = args[1];
@@ -107,8 +123,9 @@ public final class WardCommand implements CommandExecutor, TabCompleter {
         try {
             radius = Double.parseDouble(args[2]);
         } catch (NumberFormatException e) {
-            send(player, "<red>Radius must be a number between " + config.minRadius()
-                    + " and " + config.maxRadius() + ".</red>");
+            player.sendMessage(messages.msg("ward.create.radius-not-a-number",
+                    Placeholder.unparsed("min", String.valueOf(config.minRadius())),
+                    Placeholder.unparsed("max", String.valueOf(config.maxRadius()))));
             return;
         }
         WardType type = WardType.WARD;
@@ -118,16 +135,16 @@ public final class WardCommand implements CommandExecutor, TabCompleter {
         Block target = player.getTargetBlockExact(config.createReachBlocks());
         Material anchorMaterial = Material.matchMaterial(config.anchorMaterial());
         if (target == null || target.getType() != anchorMaterial) {
-            send(player, "<red>Target a placed " + config.anchorMaterial()
-                    + " block (within " + config.createReachBlocks()
-                    + " blocks) to bind the ward.</red>");
+            player.sendMessage(messages.msg("ward.create.no-anchor",
+                    Placeholder.unparsed("material", config.anchorMaterial()),
+                    Placeholder.unparsed("reach", String.valueOf(config.createReachBlocks()))));
             return;
         }
         Optional<UUID> teamId = teams == null ? Optional.empty() : teams.teamOf(player.getUniqueId());
         CompletableFuture<WardResult> future = service.create(player.getUniqueId(), teamId,
                 name, target.getWorld().getName(), target.getX(), target.getY(), target.getZ(),
                 radius, type);
-        done(player, future, CREATE_MESSAGES);
+        done(player, "create", future, "ward.create.ok");
     }
 
     // ------------------------------------------------------------------
@@ -137,99 +154,118 @@ public final class WardCommand implements CommandExecutor, TabCompleter {
     private void list(Player player) {
         List<Ward> wards = service.ownedBy(player.getUniqueId());
         if (wards.isEmpty()) {
-            send(player, "<gray>You have no watch wards. Create one with "
-                    + "/ward create &lt;name&gt; &lt;radius&gt; at a placed "
-                    + config.anchorMaterial() + ".</gray>");
+            player.sendMessage(messages.msg("list.empty",
+                    Placeholder.unparsed("material", config.anchorMaterial())));
             return;
         }
-        send(player, "<gray>Your watch wards (" + wards.size() + "):</gray>");
+        player.sendMessage(messages.raw("list.header",
+                Placeholder.unparsed("count", String.valueOf(wards.size()))));
         for (Ward ward : wards) {
-            send(player, renderWardLine(ward, player));
+            player.sendMessage(renderWardLine(ward, player));
         }
     }
 
     private void info(Player player, Ward ward) {
-        send(player, "<gray>Watch ward '</gray><aqua>" + escape(ward.name()) + "<gray>'</gray>");
-        send(player, "<gray>Type:</gray> " + (ward.type() == WardType.DECOY
-                ? "<yellow>decoy</yellow>" : "<white>ward</white>")
-                + " <gray>| Status:</gray> " + (ward.active()
-                ? "<green>active</green>" : "<red>inactive</red>"));
-        send(player, "<gray>Radius:</gray> <white>" + ward.radius() + " blocks</white>"
-                + " <gray>| World:</gray> <white>" + escape(ward.world()) + "</white>"
-                + " <gray>| Anchor:</gray> <white>" + (int) Math.floor(ward.x()) + ", "
-                + (int) Math.floor(ward.y()) + ", " + (int) Math.floor(ward.z()) + "</white>");
-        send(player, "<gray>Reported outsiders inside:</gray> <white>"
-                + service.reportedInsiders(ward.id()) + "</white>");
-        send(player, "<gray>Wards report approaching outsiders only - they do not "
-                + "protect this area.</gray>");
+        player.sendMessage(messages.raw("info.header",
+                Placeholder.unparsed("ward", ward.name())));
+        player.sendMessage(messages.raw("info.type-line",
+                Placeholder.component("type", messages.raw(
+                        ward.type() == WardType.DECOY ? "info.type-decoy" : "info.type-ward")),
+                Placeholder.component("status", messages.raw(
+                        ward.active() ? "state.active" : "state.inactive"))));
+        player.sendMessage(messages.raw("info.geometry",
+                Placeholder.unparsed("radius", String.valueOf(ward.radius())),
+                Placeholder.unparsed("world", ward.world()),
+                Placeholder.unparsed("x", String.valueOf((int) Math.floor(ward.x()))),
+                Placeholder.unparsed("y", String.valueOf((int) Math.floor(ward.y()))),
+                Placeholder.unparsed("z", String.valueOf((int) Math.floor(ward.z())))));
+        player.sendMessage(messages.raw("info.insiders",
+                Placeholder.unparsed("count", String.valueOf(service.reportedInsiders(ward.id())))));
+        player.sendMessage(messages.raw("info.no-protection"));
     }
 
-    private String renderWardLine(Ward ward, Player player) {
-        double distance = net.zaminmc.rebellion.wards.distance.DistanceService
-                .horizontalDistance(ward.world(), ward.x(), ward.z(),
-                        player.getWorld().getName(), player.getLocation().getX(),
-                        player.getLocation().getZ())
+    private Component renderWardLine(Ward ward, Player player) {
+        double distance = DistanceService.horizontalDistance(ward.world(), ward.x(), ward.z(),
+                player.getWorld().getName(), player.getLocation().getX(),
+                player.getLocation().getZ())
                 .orElse(-1.0);
-        String where = distance < 0
-                ? "different world"
-                : distances.format(distance, ward.world()) + " away";
-        return "<gray>• '</gray><aqua>" + escape(ward.name()) + "<gray>'</gray> "
-                + (ward.active() ? "<green>active</green>" : "<red>inactive</red>")
-                + (ward.type() == WardType.DECOY ? " <yellow>(decoy)</yellow>" : "")
-                + " <gray>- r" + ward.radius() + ", " + where + "</gray>";
+        Component where = distance < 0
+                ? messages.raw("list.different-world")
+                : Component.text(distances.format(distance, ward.world()) + " away");
+        return messages.raw("list.line",
+                Placeholder.unparsed("ward", ward.name()),
+                Placeholder.component("state", messages.raw(
+                        ward.active() ? "state.active" : "state.inactive")),
+                Placeholder.component("decoy", ward.type() == WardType.DECOY
+                        ? messages.raw("state.decoy-tag") : Component.empty()),
+                Placeholder.unparsed("radius", String.valueOf(ward.radius())),
+                Placeholder.component("where", where));
     }
 
     // ------------------------------------------------------------------
     // Shared plumbing
     // ------------------------------------------------------------------
 
-    private void byName(Player player, String[] args, int nameIndex, String usage,
+    private void byName(Player player, String[] args, int nameIndex, String usageKey,
             Consumer<Ward> action) {
         if (args.length <= nameIndex) {
-            send(player, "<red>" + usage + "</red>");
+            player.sendMessage(messages.msg(usageKey));
             return;
         }
         Optional<Ward> ward = service.byName(player.getUniqueId(), args[nameIndex]);
         if (ward.isEmpty()) {
-            send(player, "<gray>No ward of yours or your team is named '"
-                    + escape(args[nameIndex]) + "'.</gray>");
+            player.sendMessage(messages.msg("no-such-ward",
+                    Placeholder.unparsed("name", args[nameIndex])));
             return;
         }
         action.accept(ward.get());
     }
 
-    private void done(Player player, CompletableFuture<WardResult> future,
-            Map<WardOutcome, String> messages) {
+    /**
+     * Renders one typed result: {@code okKey} for the OK outcome (toggle has
+     * two), {@code ward.<action>.<outcome>} for everything else. Detail and
+     * ward name arrive as placeholders, never as raw MiniMessage.
+     */
+    private void done(Player player, String action, CompletableFuture<WardResult> future,
+            String okKey, TagResolver... extraResolvers) {
         future.whenComplete((result, err) -> {
             if (err != null) {
-                send(player, "<red>That action is unavailable right now; nothing was changed. "
-                        + "Please try again in a moment.</red>");
+                player.sendMessage(messages.msg("common.unavailable"));
                 return;
             }
-            send(player, render(result, messages));
+            String key = result.outcome() == WardOutcome.OK
+                    ? okKey : outcomeKey(action, result.outcome());
+            String detail = result.detail() != null ? result.detail()
+                    : result.ward() != null ? result.ward().name() : "";
+            player.sendMessage(messages.msg(key, joined(extraResolvers,
+                    Placeholder.unparsed("detail", detail))));
         });
     }
 
-    private static String render(WardResult result, Map<WardOutcome, String> messages) {
-        String message = messages.getOrDefault(result.outcome(),
-                "<red>The action failed with an unexpected result.</red>");
-        String detail = result.detail() != null ? result.detail()
-                : result.ward() != null ? result.ward().name() : "";
-        return message.replace("{detail}", detail);
+    private static TagResolver[] joined(TagResolver[] extra, TagResolver detail) {
+        TagResolver[] all = new TagResolver[extra.length + 1];
+        System.arraycopy(extra, 0, all, 0, extra.length);
+        all[extra.length] = detail;
+        return all;
+    }
+
+    /**
+     * Outcome → catalog key: {@code ward.<action>.<outcome>} with the enum
+     * name lowercased and underscores as dashes — deterministic (ADR-0012).
+     * Infrastructure failure (DB_ERROR) fails closed with the shared
+     * unavailable message.
+     */
+    public static String outcomeKey(String action, WardOutcome outcome) {
+        return switch (outcome) {
+            case DB_ERROR -> "common.unavailable";
+            default -> "ward." + action + "."
+                    + outcome.name().toLowerCase(Locale.ROOT).replace('_', '-');
+        };
     }
 
     private boolean usage(Player player) {
-        send(player, "<gray>Usage: /ward <create|remove|toggle|list|info> — watch wards "
-                + "report approaching outsiders; they never protect land.</gray>");
+        player.sendMessage(messages.msg("usage"));
         return true;
-    }
-
-    private static void send(Player player, String miniMessage) {
-        player.sendMessage(MINI.deserialize(miniMessage));
-    }
-
-    private static String escape(String value) {
-        return value == null ? "" : value.replace("<", "").replace(">", "");
     }
 
     @Override
@@ -252,46 +288,5 @@ public final class WardCommand implements CommandExecutor, TabCompleter {
             completions.add("decoy");
         }
         return completions;
-    }
-
-    // ------------------------------------------------------------------
-    // Outcome messages
-    // ------------------------------------------------------------------
-
-    private static final Map<WardOutcome, String> CREATE_MESSAGES = Map.ofEntries(
-            Map.entry(WardOutcome.OK, "<green>Watch ward '{detail}' created and active.</green>"),
-            Map.entry(WardOutcome.NAME_INVALID, "<red>Ward names are 3-24 chars of letters, digits, underscore or hyphen.</red>"),
-            Map.entry(WardOutcome.NAME_TAKEN, "<red>You already have a ward with that name.</red>"),
-            Map.entry(WardOutcome.RADIUS_INVALID, "<red>Radius must be between {detail} blocks.</red>"),
-            Map.entry(WardOutcome.PLAYER_CAP, "<red>You reached your ward cap of {detail}. Remove one first.</red>"),
-            Map.entry(WardOutcome.TEAM_CAP, "<red>Your team reached its ward cap of {detail}.</red>"),
-            Map.entry(WardOutcome.GLOBAL_CAP, "<red>The server reached its global ward cap of {detail}.</red>"),
-            Map.entry(WardOutcome.ANCHOR_TAKEN, "<red>That anchor block already carries a ward.</red>"),
-            Map.entry(WardOutcome.DECOYS_DISABLED, "<red>Decoy wards are disabled on this server.</red>"),
-            Map.entry(WardOutcome.DB_ERROR, "<red>The action is unavailable right now; nothing was changed.</red>"));
-
-    private static final Map<WardOutcome, String> REMOVE_MESSAGES = Map.ofEntries(
-            Map.entry(WardOutcome.OK, "<green>Watch ward '{detail}' removed.</green>"),
-            Map.entry(WardOutcome.NOT_FOUND, "<gray>That ward no longer exists.</gray>"),
-            Map.entry(WardOutcome.NO_RIGHTS, "<red>Only the ward owner or a team manager can do that.</red>"),
-            Map.entry(WardOutcome.DB_ERROR, "<red>The action is unavailable right now; nothing was changed.</red>"));
-
-    private static Map<WardOutcome, String> toggleMessages(Ward ward) {
-        // Built before the mutation: the ward's current active flag tells us
-        // what the new state will be, so OK can name it.
-        String ok = ward.active()
-                ? "<green>Watch ward '" + escapeStatic(ward.name()) + "' deactivated.</green>"
-                : "<green>Watch ward '" + escapeStatic(ward.name()) + "' reactivated.</green>";
-        return Map.ofEntries(
-                Map.entry(WardOutcome.OK, ok),
-                Map.entry(WardOutcome.NOT_FOUND, "<gray>That ward no longer exists.</gray>"),
-                Map.entry(WardOutcome.NO_RIGHTS,
-                        "<red>Only the ward owner or a team manager can do that.</red>"),
-                Map.entry(WardOutcome.DB_ERROR,
-                        "<red>The action is unavailable right now; nothing was changed.</red>"));
-    }
-
-    private static String escapeStatic(String value) {
-        return value == null ? "" : value.replace("<", "").replace(">", "");
     }
 }

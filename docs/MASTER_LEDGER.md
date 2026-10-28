@@ -14,7 +14,7 @@ its owning module has tests passing in `./gradlew test`.
 | Shared API contracts (database, module registry, results) | rebellion-api | verified-on-Paper-26.3 (boot) | loads + enables first; one runtime class identity via plugin `depend` |
 | Core lifecycle + bootstrap + fail-closed disable | rebellion-core | verified-on-Paper-26.3 (boot) | first-boot config generation, SQLite WAL pool, clean shutdown; BootstrapException path unit-covered; broken-config live path still manual |
 | Config loader framework (atomic reload, env expansion, issue aggregation) | rebellion-core | tested | ConfigLoaderTest, CoreConfigLoaderTest, DatabaseConfigLoaderTest |
-| Messages loader (bundled defaults, strict MiniMessage validation) | rebellion-core | tested | CoreMessagesTest; closed-tag contract |
+| Messages loader (bundled defaults, strict MiniMessage validation) | rebellion-core + rebellion-api | verified-on-Paper-26.3 (boot, reload) | CoreMessagesTest + MessageCatalogTest (ADR-0012); closed-tag contract; shared MessageCatalog since ADR-0012 |
 | Diagnostics (incident IDs, bounded ring, rotated sanitized reports) | rebellion-core | tested | DiagnosticsServiceTest |
 | Persistence service (bounded async executor, backpressure) | rebellion-core | tested | DatabaseServiceTest incl. rejection + shutdown flush |
 | HikariCP pool (shaded/relocated) + SQLite + MySQL config | rebellion-core | tested | SQLite integration-tested; MySQL path config-tested only |
@@ -34,6 +34,9 @@ its owning module has tests passing in `./gradlew test`.
 | `%rebellion_rarity_<material>%` placeholder | rebellion-items | tested | pure registry read; junk input → null (PAPI leaves text untouched) |
 | Custom item registry (items.yml: named items, talisman families, unique instances) | rebellion-items | tested | CustomItemLoaderTest; factory is the only sanctioned creation path |
 | /rebellionitems give <defined-id> [player] | rebellion-items | implemented | restricted mint: defined items only, admin permission, logged |
+| Module messages wiring: bundled+extracted messages.yml, catalog rendering (ADR-0012) | rebellion-api + items/teams/wards | verified-on-Paper-26.3 (boot, reload, restart) | extraction on first boot, admin-edit-wins, per-key fallback with precise warnings; per-module coverage tests; admin-edit reload + broken-template fallback live-verified |
+| Chat channel formats + rate-limit notice via catalog | rebellion-teams | tested | `<sender>`/`<message>` component placeholders; TeamsMessagesTest |
+| Ward alert/anchor/listing texts via catalog | rebellion-wards | tested | AlertRouterTest asserts the shipped templates; name injection structurally impossible (unparsed placeholders) |
 
 ## Wards (rebellion-wards, Phase 4)
 
@@ -105,10 +108,11 @@ its owning module has tests passing in `./gradlew test`.
   build 226. The ward pipeline (movement sampling, anchor raytrace, alert
   rendering), teams invites/chat and menu clicking still need the documented
   interactive pass.
-- Feature modules (items/teams/wards) bundle `messages.yml` but do not
-  extract or render it yet — module chat/alert copy still uses hard-coded
-  strings. Wiring the Core messages pattern into the feature modules is a
-  follow-up slice; the boot smoke surfaced the gap.
+- Feature-module `messages.yml` wiring is DONE (ADR-0012, session 8): all
+  player feedback renders through extracted catalogs, live-verified through
+  the boot smoke (admin-edit reload, broken-template fallback, restart
+  byte-identity). Remaining honest gap: player-visible rendering (menus,
+  invites, alerts to actual players) is still part of the interactive pass.
 
 Session additions (2026-10-28, dragons persistence layer):
 
@@ -121,3 +125,13 @@ Session additions (2026-10-28, dragons persistence layer):
   routing) is controller-phase work; the registry models undeliverable
   copies via the recovery mailbox so the persistence side is complete,
   but no Bukkit listener enforces it yet.
+
+Session additions (2026-10-28, module message catalogs — ADR-0012):
+
+- The previously reserved "ADR-0012 dimension-artifact state machine"
+  roadmap slot moved to ADR-0013; ADR-0012 is the message catalog decision.
+- Two latent rendering defects fixed by the migration: wards `list.empty`
+  shipped HTML entities that rendered literally in game; `admin.list-line`
+  carried an unclosed `<gray>` masked by lenient MiniMessage.
+- MiniMessage escape knowledge recorded: `\<` escapes a literal opening
+  bracket, `\>` does not exist (backslash stays literal).
