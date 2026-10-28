@@ -55,6 +55,7 @@ final class RpgConfigTest {
         yaml.set("rpg.rituals.soul_lore.knowledge-key", "ritual_soul_communion");
 
         yaml.set("rpg.encounters.wandering_soul.enabled", false);
+        yaml.set("rpg.encounters.wandering_soul.soul-entity", "ALLAY");
         yaml.set("rpg.encounters.wandering_soul.worlds", List.of("world"));
         yaml.set("rpg.encounters.wandering_soul.biomes", List.of());
         yaml.set("rpg.encounters.wandering_soul.time-window", "NIGHT");
@@ -212,6 +213,32 @@ final class RpgConfigTest {
 
     private static void yamlSet(YamlConfiguration yaml, String path, Object value) {
         yaml.set(path, value);
+    }
+
+    @Test
+    void soulEntityValidation() {
+        YamlConfiguration unknown = validYaml();
+        unknown.set("rpg.encounters.wandering_soul.soul-entity", "NOT_AN_ENTITY");
+        assertTrue(RpgConfig.loadResult(unknown).issues().stream()
+                .anyMatch(i -> i.contains("soul-entity")));
+
+        // Non-living types are refused: souls are damage-protected quest
+        // givers, so the protection path assumes a living entity.
+        YamlConfiguration arrow = validYaml();
+        arrow.set("rpg.encounters.wandering_soul.soul-entity", "ARROW");
+        assertTrue(RpgConfig.loadResult(arrow).issues().stream()
+                .anyMatch(i -> i.contains("soul-entity")));
+
+        // Absent value falls back to the honest default VILLAGER.
+        YamlConfiguration unset = validYaml();
+        unset.set("rpg.encounters.wandering_soul.soul-entity", null);
+        RpgConfig.LoadResult result = RpgConfig.loadResult(unset);
+        assertTrue(result.valid(), () -> result.issues().toString());
+        assertEquals(org.bukkit.entity.EntityType.VILLAGER,
+                result.config().encounter("wandering_soul").soulEntity());
+
+        assertEquals(org.bukkit.entity.EntityType.ALLAY,
+                RpgConfig.defaults().encounter("wandering_soul").soulEntity());
     }
 
     @Test

@@ -2,6 +2,7 @@ package net.zaminmc.rebellion.rpg;
 
 import java.util.List;
 import java.util.Locale;
+import org.bukkit.entity.EntityType;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -12,12 +13,17 @@ import org.jetbrains.annotations.NotNull;
  * rule that is state (concurrency cap, cooldown, TTL, rewards).
  *
  * <p>Biome names are free-text keys matched case-insensitively by the
- * future controller against {@code Biome} names — the persistence layer
- * never touches the biome registry (serverless discipline).</p>
+ * controller against {@code Biome} names — the persistence layer never
+ * touches the biome registry (serverless discipline).</p>
  *
  * @param key the encounter key ({@code [a-z0-9_]{1,32}})
  * @param enabled whether begins are allowed (the shipped default is
  *        disabled — spawn rules are world data the operator calibrates)
+ * @param soulEntity the entity type the controller spawns for this
+ *        encounter. Must be a living type — souls are damage-protected
+ *        quest givers, so the protection path assumes a living entity;
+ *        validated registry-free by enum constant plus isAlive() (the
+ *        ADR-0015 serverless lesson).
  * @param worlds allowed worlds (non-empty; case-insensitive match)
  * @param biomes allowed biome keys (empty = any)
  * @param timeWindow when the encounter may spawn
@@ -32,6 +38,7 @@ import org.jetbrains.annotations.NotNull;
 public record EncounterDefinition(
         @NotNull String key,
         boolean enabled,
+        @NotNull EntityType soulEntity,
         @NotNull List<String> worlds,
         @NotNull List<String> biomes,
         @NotNull TimeWindow timeWindow,
@@ -54,6 +61,13 @@ public record EncounterDefinition(
     public static final int MAX_REWARDS = 16;
 
     public EncounterDefinition {
+        if (soulEntity == null) {
+            throw new IllegalArgumentException("soul entity type is required");
+        }
+        if (!soulEntity.isAlive()) {
+            throw new IllegalArgumentException("soul entity must be a living "
+                    + "type (got " + soulEntity + ")");
+        }
         worlds = List.copyOf(worlds);
         biomes = List.copyOf(biomes);
         rewards = List.copyOf(rewards);

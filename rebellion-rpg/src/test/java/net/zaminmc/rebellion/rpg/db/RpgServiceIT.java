@@ -98,7 +98,8 @@ final class RpgServiceIT {
 
     /** The sample encounter enabled with a 1h ledger cooldown. */
     private static EncounterDefinition wanderingSoul(long cooldownSeconds) {
-        return new EncounterDefinition("wandering_soul", true, List.of("world"),
+        return new EncounterDefinition("wandering_soul", true,
+                org.bukkit.entity.EntityType.ALLAY, List.of("world"),
                 List.of(), EncounterDefinition.TimeWindow.NIGHT, 1, 0, 1,
                 cooldownSeconds, 1800L, List.of("ritual_soul_communion"));
     }

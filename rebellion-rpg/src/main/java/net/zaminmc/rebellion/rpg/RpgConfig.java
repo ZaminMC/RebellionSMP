@@ -99,7 +99,8 @@ public record RpgConfig(@NotNull Map<String, RitualDefinition> rituals,
                                 86_400L, 1, 86_400L, 30L, Precision.REGION,
                                 0.0, 1, java.util.Optional.of("ritual_soul_communion"))),
                 Map.of("wandering_soul", new EncounterDefinition("wandering_soul",
-                        false, List.of("world"), List.of(),
+                        false, org.bukkit.entity.EntityType.ALLAY, List.of("world"),
+                        List.of(),
                         EncounterDefinition.TimeWindow.NIGHT,
                         1, 0, 1, 86_400L, 1800L,
                         List.of("ritual_soul_communion"))));
@@ -297,6 +298,19 @@ public record RpgConfig(@NotNull Map<String, RitualDefinition> rituals,
 
             boolean enabled = def.getBoolean("enabled", false);
 
+            // Soul entity (controller surface): living types only — the
+            // damage-protection path assumes a living entity. Registry-free
+            // constant lookup + isAlive() (the ADR-0015 serverless lesson).
+            String soulRaw = def.getString("soul-entity", "VILLAGER");
+            org.bukkit.entity.EntityType soulEntity = parseSoulEntity(soulRaw);
+            if (soulEntity == null) {
+                issues.add(path + ".soul-entity: unknown entity type (got '"
+                        + soulRaw + "')");
+            } else if (!soulEntity.isAlive()) {
+                issues.add(path + ".soul-entity: must be a living entity type (got '"
+                        + soulRaw + "')");
+            }
+
             List<String> worlds = def.getStringList("worlds");
             worlds = worlds.stream().map(String::trim).filter(s -> !s.isBlank()).toList();
             if (worlds.isEmpty()) {
@@ -371,11 +385,24 @@ public record RpgConfig(@NotNull Map<String, RitualDefinition> rituals,
 
             if (issues.stream().noneMatch(i -> i.startsWith(path + ":")
                     || i.startsWith(path + "."))) {
-                encounters.put(key, new EncounterDefinition(key, enabled, worlds, biomes,
+                encounters.put(key, new EncounterDefinition(key, enabled,
+                        soulEntity == null
+                                ? org.bukkit.entity.EntityType.VILLAGER : soulEntity,
+                        worlds, biomes,
                         window == null ? EncounterDefinition.TimeWindow.ANY : window,
                         minPlayers, maxPlayers, maxConcurrent, cooldown, ttl, rewards));
             }
         }
         return encounters;
+    }
+
+    /** Enum-constant lookup (registry-free); null on unknown input. */
+    private static org.bukkit.entity.EntityType parseSoulEntity(String raw) {
+        try {
+            return org.bukkit.entity.EntityType.valueOf(
+                    raw.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 }
