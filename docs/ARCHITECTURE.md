@@ -451,3 +451,61 @@ for the transition tables.
 world-setup data), the return delay, the rebellion-event toggle and
 trigger scope (§ CONFIGURATION.md). `ArtifactsConfigTest` pins the shipped
 file and the `defaults()` factory to each other.
+
+### Artifacts controller (ADR-0015, session 12 — the seventh installable jar)
+
+The controller slice puts the ADR-0013 state machines in front of players.
+`ArtifactsPlugin` follows the proven wiring: config + messages load
+(fail-closed), Core services, migrations v1+v2 (fail-closed), seed + mirror,
+then listeners → sweep task → commands → placeholders → module health.
+POSTWORLD (origin anchors are world coordinates); the sweep cadence is
+config-owned (`sweep.interval-seconds`, 5..600 s).
+
+**Protected-origin presentation** (`OriginPresentation`): while a row is
+ORIGIN, the anchor shows a tagged ItemDisplay (visual, custom name from the
+catalog) + Interaction (click target) pair. The pair is presentation, not
+state — the sweep reconciles loaded anchor chunks to exactly one pair per
+ORIGIN row (none otherwise), and a missing half converges to a fresh pair
+(proven live: killing one half, then both, converged to exactly 1+1 within
+one sweep). Chunk discipline: unloaded anchors (e.g. an empty server) wait
+— presentations exist where players can see them; `getChunkAtAsync`
+requests the chunk, the next sweep services it. Capture (right-click,
+`OriginListener`): row must be ORIGIN, inventory must have room, and the
+`capture` CAS is the sole authority — raced or cloned clicks lose
+structurally. Protection: damage on the pair is cancelled; Paper 26.3's
+`EntityRemoveEvent` is monitoring-only and `/kill` on a non-living display
+bypasses damage events (measured live) — the backstop is the self-healing
+reconcile: nothing can *permanently* delete the discoverable origin because
+the row, not the entity, is the authority.
+
+**Item flows** (`ArtifactFlowListener`, ADR-0015 §2): player pickup of a
+live-stamped stack → `transfer` (or `found` when LOST; same-holder pickup
+is a no-op); container takes (chest theft) through `InventoryClickEvent`
+→ `transfer`; item-entity removal (DESPAWN/DEATH/EXPLODE/OUT_OF_WORLD/
+DISCARD) → `markLost` (idempotent). Hopper suction is cancelled (a
+container hop is not a loss) and live-stamped crafting ingredients are
+cancelled. Chest storage is legal — the row stays HELD; destruction is
+valid gameplay — LOST is recoverable, the deliberate opposite of the
+dragons egg policy.
+
+**Rebellion observer** (`RebellionObserver`): after any HELD transition a
+dumb mirror probe — all three held by one player → `triggerRebellion` (the
+guard CAS collapses duplicates). Global broadcast on trigger, join notice
+while ACTIVE, config-owned reminder cadence and occurrence duration; the
+sweep completes the occurrence after the duration, admin can force.
+
+**Purge** (`PurgeExecutor`, ADR-0015 §4): config-disabled by default;
+runtime gates = ACTIVE occurrence + trigger holder + telegraph elapsed +
+literal `confirm`; the warning broadcast leads the kill loop by
+`warning-seconds`; the once-per-occurrence stamp (schema v2
+`purge_executed_utc`, CAS NULL→now) commits before any player is touched;
+target set = ONLINE (STORED is a loud unimplemented config error), holder
+spared per config. Kill = plain `setHealth(0)` per target — no attribute
+stacking.
+
+**Commands/placeholders**: `/artifact status|return confirm|spend confirm|
+purge confirm` (eligibility service-side; confirm keywords are literals —
+no free text executes), `/artifactadmin list|info|route|audit|complete
+confirm|events`; `%rebellion_artifact_state_<key>%`,
+`%rebellion_artifact_holder_<key>%`, `%rebellion_artifact_event_active%`
+(mirror reads only; origin coordinates are never exposed).

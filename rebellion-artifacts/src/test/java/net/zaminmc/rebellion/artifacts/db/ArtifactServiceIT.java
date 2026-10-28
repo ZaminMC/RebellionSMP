@@ -2,6 +2,8 @@ package net.zaminmc.rebellion.artifacts.db;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -93,7 +95,7 @@ final class ArtifactServiceIT {
                 java.util.logging.Logger.getLogger("test"), diagnostics());
         await(fresh.bootstrap());
         await(fresh.applyModuleMigrations("artifacts",
-                List.of(ArtifactsSchema.v1())));
+                ArtifactsSchema.migrations()));
         return fresh;
     }
 
@@ -224,7 +226,12 @@ final class ArtifactServiceIT {
                         "hell", 0, 40, 0),
                 ArtifactKey.END, new ArtifactsConfig.OriginAnchor(
                         "void", 0, 60, 0));
-        ArtifactsConfig recalibrated = new ArtifactsConfig(calibrated, 60L, true);
+        ArtifactsConfig recalibrated = new ArtifactsConfig(calibrated, 60L, true,
+                ArtifactsConfig.defaults().itemMaterials(),
+                ArtifactsConfig.defaults().sweepIntervalSeconds(),
+                ArtifactsConfig.defaults().eventDurationMinutes(),
+                ArtifactsConfig.defaults().eventReminderMinutes(),
+                ArtifactsConfig.defaults().purge());
         ArtifactService second = new ArtifactService(db, recalibrated, clock::get);
         await(second.loadAll());
 
@@ -822,4 +829,88 @@ final class ArtifactServiceIT {
         }
         assertTrue(service.activeEvent().isEmpty());
     }
+
+    // ------------------------------------------------------------------
+    // Purge stamp (ADR-0015 §4, schema v2)
+    // ------------------------------------------------------------------
+
+    @Test
+    void purgeClaimIsOncePerOccurrence() {
+        captureAllFor(playerA);
+        RebellionEvent event = triggerOk(playerA, "purge gate test");
+        ArtifactResult first = runResult(
+                service.executePurge(event.eventId(), admin));
+        assertEquals(ArtifactOutcome.PURGE_EXECUTED, first.outcome());
+        assertNotNull(first.event());
+        assertNotNull(first.event().purgeExecutedAtUtc(),
+                "the winner carries the execution stamp");
+
+        ArtifactResult second = runResult(
+                service.executePurge(event.eventId(), admin));
+        assertEquals(ArtifactOutcome.PURGE_ALREADY_EXECUTED, second.outcome());
+        assertFalse(second.mutated(), "the retry must be a typed no-op");
+
+        // The active-event mirror carries the stamped occurrence.
+        assertTrue(service.activeEvent().isPresent());
+        assertEquals(event.eventId(), service.activeEvent().get().eventId());
+        assertNotNull(service.activeEvent().get().purgeExecutedAtUtc());
+    }
+
+    @Test
+    void purgeStampSurvivesRestartAndBlocksReExecution() throws Exception {
+        captureAllFor(playerA);
+        RebellionEvent event = triggerOk(playerA, "restart round-trip");
+        runResult(service.executePurge(event.eventId(), admin));
+
+        // Restart: a fresh service over the same database file.
+        ArtifactService second = new ArtifactService(db, config(), clock::get);
+        await(second.loadAll());
+        assertTrue(second.activeEvent().isPresent());
+        assertNotNull(second.activeEvent().get().purgeExecutedAtUtc(),
+                "the once-per-occurrence stamp must survive the restart");
+
+        ArtifactResult retried = runResult(
+                second.executePurge(event.eventId(), admin));
+        assertEquals(ArtifactOutcome.PURGE_ALREADY_EXECUTED, retried.outcome());
+        assertFalse(retried.mutated());
+    }
+
+    @Test
+    void completeRebellionPreservesThePurgeStamp() {
+        captureAllFor(playerA);
+        RebellionEvent event = triggerOk(playerA, "completion keeps the stamp");
+        runResult(service.executePurge(event.eventId(), admin));
+
+        ArtifactResult completed = runResult(
+                service.completeRebellion(event.eventId(), admin));
+        assertEquals(ArtifactOutcome.EVENT_COMPLETED, completed.outcome());
+        assertNotNull(completed.event().purgeExecutedAtUtc(),
+                "completion must not rewrite or clear the purge stamp");
+    }
+
+    @Test
+    void purgeRefusesUnknownEvents() {
+        ArtifactResult result = runResult(
+                service.executePurge(UUID.randomUUID(), admin));
+        assertEquals(ArtifactOutcome.NOT_FOUND, result.outcome());
+        assertFalse(result.mutated());
+    }
+
+    @Test
+    void migrationSetIsAppendOnlyAndReApplyIsANoOp() throws Exception {
+        // ADR-0005 discipline, pinned: the runner refuses a CHANGED set for
+        // an already-migrated module (a v1-only list after v1+v2 is a loud
+        // refusal, never a silent partial state), and re-applying the same
+        // list is an idempotent no-op. No v1-era artifacts database can
+        // exist in the wild (the module shipped no jar before this commit),
+        // so the v1+v2 split is the append-only audit trail, not an upgrade
+        // path that needs live data.
+        org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class,
+                () -> await(db.applyModuleMigrations("artifacts",
+                        java.util.List.of(ArtifactsSchema.v1()))),
+                "a shrunk migration set must be refused loudly");
+        await(db.applyModuleMigrations("artifacts", ArtifactsSchema.migrations()));
+        assertEquals(3, service.count(), "re-apply changed nothing");
+    }
+
 }

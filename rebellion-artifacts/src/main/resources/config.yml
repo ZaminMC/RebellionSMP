@@ -64,3 +64,63 @@ artifacts:
     # configuration option (master prompt 5.5) and is rejected loudly here
     # as unimplemented — never a silent stretch.
     trigger-scope: HOLDER
+
+  # ---------------------------------------------------------------------------
+  # Controller values (ADR-0015) — the physical surface players touch.
+  # ---------------------------------------------------------------------------
+
+  items:
+    # The physical item material of each artifact (what the origin
+    # presentation displays and what holders carry). Must be a valid item
+    # material; display name and lore come from messages.yml so operators
+    # skin the items without touching identity. Themes (master prompt 5.5):
+    overworld:
+      # Overworld — theme of life/dominion.
+      material: HEART_OF_THE_SEA
+    nether:
+      # Nether — theme of fire/destruction/war.
+      material: NETHER_STAR
+    end:
+      # End — theme of void/knowledge/dimensional influence.
+      material: ENDER_EYE
+
+  sweep:
+    # Cadence of the maintenance sweep: the return pipeline (LOST/SPENT ->
+    # RETURNING -> ORIGIN), the origin-presentation reconcile, and the
+    # event-duration completion all ride this one task. Bounded 5..600 s.
+    interval-seconds: 30
+
+  event:
+    # How long one Rebellion occurrence stays ACTIVE before the sweep
+    # completes it (the guard clears, the world can reconquer). Bounded
+    # 5..1440 minutes. Admins can force-complete earlier
+    # (/artifactadmin complete confirm).
+    duration-minutes: 60
+    # While an occurrence is ACTIVE, remind every online player every N
+    # minutes (0 disables the reminder; the trigger broadcast and the
+    # join-time notice always render). Bounded 0..1440.
+    reminder-minutes: 10
+
+  purge:
+    # The explicitly configured world-wide kill power (master prompt 5.5,
+    # ADR-0015 §4). Catastrophic, expensive, OPT-IN: default false.
+    # When enabled it is still quadruple-gated at runtime: an ACTIVE
+    # occurrence must exist, the actor must be its trigger holder, the
+    # min-delay telegraph must have elapsed since the trigger, and the
+    # literal "confirm" keyword is required. The once-per-occurrence
+    # stamp (schema v2) makes it structurally impossible to run twice.
+    enabled: false
+    # Who is killed. ONLINE is the only implemented target set: every
+    # player currently online. STORED (all stored player records) needs a
+    # profiles module to enumerate records and is rejected loudly as
+    # unimplemented — never a silent stretch.
+    target-set: ONLINE
+    # Never accidentally kill the activating holder (master prompt 5.5).
+    # Set false only if the configured rules should explicitly say so.
+    spare-holder: true
+    # The telegraph: minutes after the trigger before the purge may be
+    # confirmed at all. Bounded 0..1440.
+    min-delay-minutes: 10
+    # Final warning lead: seconds between the global warning broadcast and
+    # the kill loop. Bounded 5..600.
+    warning-seconds: 30

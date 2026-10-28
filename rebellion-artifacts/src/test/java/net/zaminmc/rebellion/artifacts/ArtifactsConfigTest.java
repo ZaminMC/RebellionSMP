@@ -210,4 +210,134 @@ final class ArtifactsConfigTest {
                 """));
         assertTrue(config.rebellionEventEnabled());
     }
+
+    // ------------------------------------------------------------------
+    // Controller sections (ADR-0015): materials, sweep, event, purge
+    // ------------------------------------------------------------------
+
+    @Test
+    void controllerDefaultsMatchTheShippedFile() {
+        ArtifactsConfig shipped = ArtifactsConfig.load(shipped());
+        ArtifactsConfig defaults = ArtifactsConfig.defaults();
+        assertEquals(shipped.itemMaterials(), defaults.itemMaterials());
+        assertEquals(shipped.sweepIntervalSeconds(), defaults.sweepIntervalSeconds());
+        assertEquals(shipped.eventDurationMinutes(), defaults.eventDurationMinutes());
+        assertEquals(shipped.eventReminderMinutes(), defaults.eventReminderMinutes());
+        assertEquals(shipped.purge(), defaults.purge());
+    }
+
+    @Test
+    void itemMaterialsAreValidatedPerDimension() {
+        ArtifactsConfig.LoadResult garbage = ArtifactsConfig.loadResult(yaml("""
+                artifacts:
+                  items:
+                    nether:
+                      material: NOT_A_MATERIAL
+                """));
+        assertFalse(garbage.valid());
+        assertTrue(garbage.issues().stream().anyMatch(
+                i -> i.contains("artifacts.items.nether.material")));
+
+        ArtifactsConfig.LoadResult air = ArtifactsConfig.loadResult(yaml("""
+                artifacts:
+                  items:
+                    end:
+                      material: AIR
+                """));
+        assertFalse(air.valid());
+        assertTrue(air.issues().stream().anyMatch(
+                i -> i.contains("artifacts.items.end.material")));
+
+        // A legal override validates and only for that dimension.
+        ArtifactsConfig.LoadResult legal = ArtifactsConfig.loadResult(yaml("""
+                artifacts:
+                  items:
+                    overworld:
+                      material: NETHERITE_INGOT
+                """));
+        assertTrue(legal.valid(), () -> legal.issues().toString());
+        assertEquals(org.bukkit.Material.NETHERITE_INGOT,
+                legal.config().itemMaterial(ArtifactKey.OVERWORLD));
+    }
+
+    @Test
+    void sweepIntervalIsBounded() {
+        for (int bad : new int[] {4, 601, -1}) {
+            ArtifactsConfig.LoadResult result = ArtifactsConfig.loadResult(yaml(
+                    "artifacts:\n  sweep:\n    interval-seconds: " + bad + "\n"));
+            assertFalse(result.valid(), "sweep " + bad + " must be refused");
+            assertTrue(result.issues().stream().anyMatch(
+                    i -> i.contains("sweep.interval-seconds")));
+        }
+        ArtifactsConfig.LoadResult ok = ArtifactsConfig.loadResult(yaml(
+                "artifacts:\n  sweep:\n    interval-seconds: 120\n"));
+        assertTrue(ok.valid(), () -> ok.issues().toString());
+        assertEquals(120, ok.config().sweepIntervalSeconds());
+    }
+
+    @Test
+    void eventDurationAndReminderAreBounded() {
+        ArtifactsConfig.LoadResult bad = ArtifactsConfig.loadResult(yaml("""
+                artifacts:
+                  event:
+                    duration-minutes: 4
+                    reminder-minutes: -1
+                """));
+        assertFalse(bad.valid());
+        assertTrue(bad.issues().stream().anyMatch(i -> i.contains("duration-minutes")));
+        assertTrue(bad.issues().stream().anyMatch(i -> i.contains("reminder-minutes")));
+
+        ArtifactsConfig.LoadResult off = ArtifactsConfig.loadResult(yaml("""
+                artifacts:
+                  event:
+                    reminder-minutes: 0
+                """));
+        assertTrue(off.valid(), () -> off.issues().toString());
+        assertEquals(0, off.config().eventReminderMinutes(), "0 disables the reminder");
+    }
+
+    @Test
+    void purgeShipsDisabledAndOnlineOnly() {
+        ArtifactsConfig defaults = ArtifactsConfig.defaults();
+        assertFalse(defaults.purge().enabled(), "the purge must ship default-off");
+        assertTrue(defaults.purge().targetsOnline());
+        assertTrue(defaults.purge().spareHolder(), "the holder is spared by default");
+    }
+
+    @Test
+    void storedTargetSetIsALoudUnimplementedRefusal() {
+        ArtifactsConfig.LoadResult stored = ArtifactsConfig.loadResult(yaml("""
+                artifacts:
+                  purge:
+                    enabled: true
+                    target-set: STORED
+                """));
+        assertFalse(stored.valid());
+        assertTrue(stored.issues().stream().anyMatch(
+                i -> i.contains("purge.target-set") && i.contains("STORED")),
+                "STORED must be refused loudly: " + stored.issues());
+    }
+
+    @Test
+    void purgeDelaysAndWarningAreBounded() {
+        ArtifactsConfig.LoadResult bad = ArtifactsConfig.loadResult(yaml("""
+                artifacts:
+                  purge:
+                    min-delay-minutes: -5
+                    warning-seconds: 2
+                """));
+        assertFalse(bad.valid());
+        assertTrue(bad.issues().stream().anyMatch(i -> i.contains("min-delay-minutes")));
+        assertTrue(bad.issues().stream().anyMatch(i -> i.contains("warning-seconds")));
+
+        ArtifactsConfig.LoadResult ok = ArtifactsConfig.loadResult(yaml("""
+                artifacts:
+                  purge:
+                    enabled: true
+                    min-delay-minutes: 0
+                    warning-seconds: 600
+                """));
+        assertTrue(ok.valid(), () -> ok.issues().toString());
+        assertTrue(ok.config().purge().enabled());
+    }
 }

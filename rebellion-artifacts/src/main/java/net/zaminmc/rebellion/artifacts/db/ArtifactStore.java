@@ -78,7 +78,8 @@ public final class ArtifactStore {
             rs.getString(3),
             RebellionEvent.State.parse(rs.getString(4)),
             rs.getLong(5),
-            rs.getObject(6) == null ? null : rs.getLong(6));
+            rs.getObject(6) == null ? null : rs.getLong(6),
+            rs.getObject(7) == null ? null : rs.getLong(7));
 
     static final RowMapper<Long> COUNT = rs -> rs.getLong(1);
 
@@ -202,15 +203,15 @@ public final class ArtifactStore {
             + "VALUES (?, ?, ?, 'ACTIVE', ?, NULL)";
 
     public static final String SELECT_EVENT_BY_ID = "SELECT event_id, trigger_holder, "
-            + "reason, state, initiated_at_utc, completed_at_utc "
+            + "reason, state, initiated_at_utc, completed_at_utc, purge_executed_utc "
             + "FROM rb_artifacts_events WHERE event_id = ?";
 
     public static final String SELECT_EVENTS_ALL = "SELECT event_id, trigger_holder, "
-            + "reason, state, initiated_at_utc, completed_at_utc "
+            + "reason, state, initiated_at_utc, completed_at_utc, purge_executed_utc "
             + "FROM rb_artifacts_events ORDER BY initiated_at_utc";
 
     public static final String SELECT_ACTIVE_EVENTS = "SELECT event_id, trigger_holder, "
-            + "reason, state, initiated_at_utc, completed_at_utc "
+            + "reason, state, initiated_at_utc, completed_at_utc, purge_executed_utc "
             + "FROM rb_artifacts_events WHERE state = 'ACTIVE'";
 
     /** Event-completion CAS: only an ACTIVE occurrence can be completed. */
@@ -235,6 +236,12 @@ public final class ArtifactStore {
     public static final String GUARD_RELEASE =
             "UPDATE rb_artifacts_event_guard SET active_event_id = NULL "
                     + "WHERE singleton = 1 AND active_event_id = ?";
+
+    /** Purge CAS (ADR-0015 §4): the world-wide kill runs exactly once per
+     *  occurrence — the NULL → now flip is the structural idempotency. */
+    public static final String CAS_PURGE =
+            "UPDATE rb_artifacts_events SET purge_executed_utc = ? "
+                    + "WHERE event_id = ? AND purge_executed_utc IS NULL";
 
     // ------------------------------------------------------------------
     // Operations (all inside the caller's transaction)
@@ -361,6 +368,13 @@ public final class ArtifactStore {
     public static int completeEvent(TransactionContext tx, UUID eventId, long nowUtc)
             throws SQLException {
         return tx.update(CAS_EVENT_COMPLETE, nowUtc, eventId);
+    }
+
+    /** Purge CAS (ADR-0015 §4): 1 = this call won the once-per-occurrence
+     *  flip and must run the kill loop; 0 = already executed. */
+    public static int purgeEvent(TransactionContext tx, UUID eventId, long nowUtc)
+            throws SQLException {
+        return tx.update(CAS_PURGE, nowUtc, eventId);
     }
 
     public static void guardInsert(TransactionContext tx) throws SQLException {

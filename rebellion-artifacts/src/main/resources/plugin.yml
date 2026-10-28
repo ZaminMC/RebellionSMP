@@ -1,0 +1,28 @@
+name: RebellionArtifacts
+version: '${version}'
+main: net.zaminmc.rebellion.artifacts.ArtifactsPlugin
+api-version: '26.3'
+# POSTWORLD: the origin anchors are world coordinates; the presentation
+# reconcile and the seed's anchor sync both want worlds resolvable.
+load: POSTWORLD
+depend: [RebellionAPI, RebellionCore]
+description: The three dimension artifacts (ADR-0013/0015) - protected discoverable origins, instance-stamped possession, recoverable loss with the return pipeline, the once-per-occurrence Rebellion event and the config-gated world-wide purge.
+authors: [Abasing]
+website: https://github.com/ZaminMC/RebellionSMP
+
+commands:
+  artifact:
+    description: Dimension artifact surface (status, voluntary return, the overpowering spend, the gated purge).
+    usage: /artifact <status|return confirm|spend confirm|purge confirm>
+  artifactadmin:
+    description: RebellionArtifacts administration (list, info, route stuck rows, audit trail, force-complete the active occurrence, event history).
+    usage: /artifactadmin <list|info <artifact>|route <artifact> <player>|audit <artifact>|complete confirm|events>
+    permission: rebellion.artifacts.admin
+
+permissions:
+  rebellion.artifacts.use:
+    description: Allows reading artifact status, returning one's held artifact, and the event-holder spend/purge powers (eligibility is enforced service-side).
+    default: true
+  rebellion.artifacts.admin:
+    description: Allows administering the artifact registry (list, info, routing stuck rows with online targets, audit trail, force-completing the active occurrence).
+    default: op

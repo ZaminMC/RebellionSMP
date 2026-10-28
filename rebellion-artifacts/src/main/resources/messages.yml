@@ -1,0 +1,106 @@
+# RebellionArtifacts messages. MiniMessage; every tag explicitly closed (the
+# loader validates this). Placeholders like <artifact> / <state> are filled by
+# code at render time as unparsed/component values - user text is never
+# parsed as MiniMessage, so injection is structurally impossible.
+# Literal angle brackets escape only the opening bracket: \<name>.
+#
+# This file is the module's complete player-feedback contract: every key any
+# command, listener, sweep or purge path renders is pinned by
+# ArtifactsMessagesTest, which strict-parses this bundled file.
+
+prefix: "<gradient:#27ae60:#c0392b>Rebellion</gradient> <dark_gray>»</dark_gray> <gray></gray>"
+
+common:
+  no-permission: "<red>You do not have permission to do that.</red>"
+  unavailable: "<red>That action is unavailable right now; nothing was changed. Please try again in a moment.</red>"
+
+usage: '<gray>Usage: /artifact \<status|return|spend|purge> - exactly three dimension artifacts exist; possession is instance-stamped.</gray>'
+player-only: "<red>Artifact commands are player-only.</red>"
+
+artifact:
+  overworld:
+    short: "<green>the Heart of Dominion</green>"
+  nether:
+    short: "<red>the Cinder of War</red>"
+  end:
+    short: "<dark_purple>the Eye of the Void</dark_purple>"
+
+item:
+  overworld:
+    name: "<green>Heart of Dominion</green>"
+    lore: "<gray>The Overworld artifact - life and dominion. Exactly one exists.</gray>"
+  nether:
+    name: "<red>Cinder of War</red>"
+    lore: "<gray>The Nether artifact - fire, destruction and war. Exactly one exists.</gray>"
+  end:
+    name: "<dark_purple>Eye of the Void</dark_purple>"
+    lore: "<gray>The End artifact - void, knowledge and dimensional influence. Exactly one exists.</gray>"
+
+state:
+  origin: "<aqua>at its protected origin</aqua>"
+  held: "<green>held</green>"
+  lost: "<yellow>lost (recovering)</yellow>"
+  returning: "<gold>returning home</gold>"
+  spent: "<dark_red>spent</dark_red>"
+
+status:
+  header: "<gray>The three dimension artifacts:</gray>"
+  line: "<gray>-</gray> <artifact> <gray>is</gray> <state> <gray>| holder:</gray> <white><holder></white> <gray>| since</gray> <white><since></white>"
+  event: "<dark_red>A Rebellion is active - event <event> (holder <holder>). The world holds its breath.</dark_red>"
+
+origin:
+  presentation-name: "<gray>A protected relic rests here...</gray>"
+  not-origin: "<red><artifact></red> <gray>is no longer at its origin - someone conquered it first.</gray>"
+  inventory-full: "<red>Your inventory is full; free a slot to claim</red> <artifact><red>.</red>"
+  captured: "<green>You claimed</green> <artifact> <green>from its protected realm. The ledger records your name.</green>"
+  capture-refused: "<red>The capture was refused (</red><reason></reason><red>) - nothing changed.</red>"
+
+flow:
+  gained: "<green>The ledger passes</green> <artifact> <green>to you. Possession is stamped.</green>"
+  craft-refused: "<red>A dimension artifact cannot be used as a crafting ingredient.</red>"
+
+event:
+  triggered: "<dark_red><bold>REBELLION</bold></dark_red> <gray>-</gray> <white><holder></white> <red>controls all three dimension artifacts! Event</red> <white><event></white> <red>has begun.</red>"
+  join-notice: "<dark_red>A Rebellion is active (event <event>) - triggered by the full control of <holder>.</dark_red>"
+  reminder: "<dark_red>The Rebellion continues (event <event>) - about <remaining> remains.</dark_red>"
+  completed: "<gray>The Rebellion occurrence</gray> <white><event></white> <gray>has run its course. The artifacts return to their realms; the world can reconquer.</gray>"
+
+return:
+  none-held: "<red>You do not hold a live dimension artifact.</red>"
+  confirm: "<gold>You are about to surrender</gold> <artifact> <gold>to its protected origin. Run</gold> <white>/artifact return confirm</white> <gold>to proceed.</gold>"
+  ok: "<green></green> <artifact> <green>enters the return pipeline. It will reappear at its protected origin.</green>"
+  refused: "<red>The return was refused (</red><reason></reason><red>) - nothing changed.</red>"
+
+spend:
+  no-event: "<red>No Rebellion occurrence is active; the overpowering action needs one.</red>"
+  not-holder: "<red>Only the occurrence's trigger holder may spend the three artifacts.</red>"
+  confirm: "<dark_red>This destroys the three artifacts' current instances to fuel the overpowering action (event <event>). Run</dark_red> <white>/artifact spend confirm</white><dark_red>. This cannot be undone.</dark_red>"
+  ok: "<dark_red>The three artifacts are spent (event <event>). Their instances die; the lineage returns home.</dark_red>"
+  refused: "<red>The spend was refused (</red><reason></reason><red>) - nothing changed.</red>"
+
+purge:
+  disabled: "<red>The world-wide purge is disabled on this server (artifacts.purge.enabled).</red>"
+  no-event: "<red>No Rebellion occurrence is active; the purge needs one.</red>"
+  not-holder: "<red>Only the occurrence's trigger holder may invoke the purge.</red>"
+  too-early: "<red>The telegraph has not elapsed - the purge cannot be confirmed yet.</red>"
+  already-executed: "<red>This occurrence's purge already ran. The kill set can never run twice.</red>"
+  confirm: "<dark_red>This invokes the world-wide purge. Run</dark_red> <white>/artifact purge confirm</white> <dark_red>- a final warning will broadcast first.</dark_red>"
+  warning: "<dark_red><bold>THE REBELLION PURGES THE WORLD</bold></dark_red> <gray>-</gray> <white><holder></white> <red>has invoked the catastrophe. In</red> <white><seconds>s</white><red>, every online player dies. Make peace.</red>"
+  executed: "<dark_red>The purge has swept the world -</dark_red> <white><count></white> <red>players died (event <event>, holder <holder> spared by rule).</red>"
+
+admin:
+  usage: '<gray>Usage: /artifactadmin \<list|info <artifact>|route <artifact> <player>|audit <artifact>|complete confirm|events></gray>'
+  list-header: "<gray>The three dimension artifacts:</gray>"
+  info: "<gray>-</gray> <artifact> <gray>[</gray><state><gray>] holder</gray> <white><holder></white> <gray>| id</gray> <white><id></white> <gray>| live instance</gray> <white><instance></white> <gray>| origin</gray> <white><origin></white>"
+  artifact-required: "<red>Specify an artifact: overworld | nether | end.</red>"
+  route-usage: '<red>Usage: /artifactadmin route \<artifact> \<player> - recovers a stuck LOST/RETURNING row to an online player.</red>'
+  target-offline: "<red>Target player</red> <white><player></white> <red>is not online; routing needs an online recipient.</red>"
+  route-ok: "<green>Routed</green> <artifact> <green>to</green> <white><player></white><green>; a fresh instance was stamped and delivered.</green>"
+  route-refused: "<red>Routing refused (</red><reason></reason><red>) - an origin must be conquered, a held artifact is not the admin's to move.</red>"
+  audit-header: "<gray>Audit trail for</gray> <artifact><gray>:</gray>"
+  audit-empty: "<gray>No audit entries.</gray>"
+  audit-line: "<gray>-</gray> <white><action></white> <gray>by</gray> <white><actor></white> <gray>at <at></gray> <dark_gray><detail></dark_gray>"
+  complete-confirm: "<red>Force-completing the ACTIVE occurrence clears the guard and reopens conquest. Run</red> <white>/artifactadmin complete confirm</white><red>.</red>"
+  complete-ok: "<gray>Occurrence</gray> <white><event></white> <gray>closed (</gray><outcome></outcome><gray>).</gray>"
+  events-header: "<gray>Rebellion occurrences:</gray>"
+  events-line: "<gray>-</gray> <white><event></white> <gray>[<state>] holder</gray> <white><holder></white> <gray>purged:</gray> <white><purged></white>"

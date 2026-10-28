@@ -278,3 +278,16 @@ Structural guarantees (all proven by `ArtifactServiceIT` over real SQLite):
 The in-memory mirror (by key / by live instance, presentable states only)
 is updated only after commit and rebuilt by `ArtifactService.loadAll()` at
 enable — same strategy as teams/wards/dragons.
+
+### rb_artifacts_events — schema v2 (ADR-0015 §4, session 12)
+
+`purge_executed_utc BIGINT NULL` — the once-per-occurrence purge stamp.
+NULL means the purge has not run for this occurrence; the executor's
+compare-and-set (`purge_executed_utc IS NULL → now`) makes the kill set
+structurally exactly-once: retried commands, restarts mid-warning and
+racing admins resolve to the typed no-op `PURGE_ALREADY_EXECUTED`. The
+stamp commits (with its audit row) before any player is touched, and
+survives occurrence completion. Migration v2 is an additive `ALTER TABLE`
+applied in one boot on first start (proven live: the smoke server's
+artifacts schema went v0 → v2 in one boot; the append-only migration-set
+guard is pinned by test).

@@ -15,6 +15,12 @@ import org.jetbrains.annotations.Nullable;
  * {@code COMPLETED} the artifacts return to their origins, the world can
  * reconquer, and a new full possession mints a new durable event id. The SMP
  * has no permanent winner (master prompt §5.5).</p>
+ *
+ * <p>The optional purge power (ADR-0015 §4) is once per occurrence by CAS:
+ * {@code purgeExecutedAtUtc} flips from NULL to the execution instant in
+ * one compare-and-set, so retried commands, restarts mid-warning and racing
+ * admins can never double-kill. Null means the purge has not run (or the
+ * power is disabled/unused for this occurrence).</p>
  */
 public record RebellionEvent(
         @NotNull UUID eventId,
@@ -22,7 +28,8 @@ public record RebellionEvent(
         @NotNull String reason,
         @NotNull State state,
         long initiatedAtUtc,
-        @Nullable Long completedAtUtc) {
+        @Nullable Long completedAtUtc,
+        @Nullable Long purgeExecutedAtUtc) {
 
     /** Event lifecycle. */
     public enum State {

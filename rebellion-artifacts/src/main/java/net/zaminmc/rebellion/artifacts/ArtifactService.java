@@ -701,7 +701,7 @@ public final class ArtifactService {
                         "event " + eventId + ": " + trimmed, now);
             }
             RebellionEvent event = new RebellionEvent(eventId, holder, trimmed,
-                    RebellionEvent.State.ACTIVE, now, null);
+                    RebellionEvent.State.ACTIVE, now, null, null);
             return new Outcome(
                     ArtifactResult.changed(ArtifactOutcome.EVENT_TRIGGERED,
                             "event " + eventId + " triggered by full control of "
@@ -885,13 +885,69 @@ public final class ArtifactService {
             }
             RebellionEvent completed = new RebellionEvent(event.eventId(),
                     event.triggerHolder(), event.reason(),
-                    RebellionEvent.State.COMPLETED, event.initiatedAtUtc(), now);
+                    RebellionEvent.State.COMPLETED, event.initiatedAtUtc(), now,
+                    event.purgeExecutedAtUtc());
             return new Outcome(ArtifactResult.changed(ArtifactOutcome.EVENT_COMPLETED,
                     "event " + eventId + " completed; the guard is clear", completed),
                     null);
         }).thenApply(outcome -> {
             if (outcome.result().outcome() == ArtifactOutcome.EVENT_COMPLETED) {
                 activeEvent = Optional.empty();
+            }
+            return outcome.result();
+        });
+    }
+
+    /**
+     * Claims the once-per-occurrence purge stamp (ADR-0015 §4). One
+     * compare-and-set flips {@code purge_executed_utc} from NULL to now;
+     * the winner ({@code PURGE_EXECUTED}) is the only call that may run
+     * the kill loop — every retry, restart mid-warning or racing admin
+     * afterwards resolves to the typed no-op
+     * {@code PURGE_ALREADY_EXECUTED}. The claim commits (with its audit
+     * row) before any player is touched, so a crash mid-kill can never
+     * re-run the set.
+     */
+    public CompletableFuture<ArtifactResult> executePurge(@NotNull UUID eventId,
+            @Nullable UUID actor) {
+        if (eventId == null) {
+            return CompletableFuture.completedFuture(ArtifactResult.failure(
+                    ArtifactOutcome.ARGUMENT_INVALID, "event id is required"));
+        }
+        long now = clock.getAsLong();
+        return db.transaction(tx -> {
+            Optional<RebellionEvent> row = ArtifactStore.eventById(tx, eventId);
+            if (row.isEmpty()) {
+                return new Outcome(ArtifactResult.failure(ArtifactOutcome.NOT_FOUND,
+                        "no rebellion event " + eventId), null);
+            }
+            RebellionEvent event = row.get();
+            if (event.purgeExecutedAtUtc() != null) {
+                return new Outcome(ArtifactResult.unchanged(
+                        ArtifactOutcome.PURGE_ALREADY_EXECUTED,
+                        "purge already executed at " + event.purgeExecutedAtUtc()
+                                + " - the kill set can never run twice", (Artifact) null),
+                        null);
+            }
+            if (ArtifactStore.purgeEvent(tx, eventId, now) != 1) {
+                return new Outcome(ArtifactResult.unchanged(
+                        ArtifactOutcome.PURGE_ALREADY_EXECUTED,
+                        "purge already claimed for event " + eventId,
+                        (Artifact) null), null);
+            }
+            ArtifactStore.audit(tx, ArtifactKey.OVERWORLD, "PURGE", actor,
+                    "purge executed for event " + eventId, now);
+            RebellionEvent stamped = new RebellionEvent(event.eventId(),
+                    event.triggerHolder(), event.reason(), event.state(),
+                    event.initiatedAtUtc(), event.completedAtUtc(), now);
+            return new Outcome(ArtifactResult.changed(
+                    ArtifactOutcome.PURGE_EXECUTED,
+                    "purge claimed for event " + eventId, stamped),
+                    null);
+        }).thenApply(outcome -> {
+            if (outcome.result().outcome() == ArtifactOutcome.PURGE_EXECUTED
+                    && activeEvent.map(e -> e.eventId().equals(eventId)).orElse(false)) {
+                activeEvent = Optional.of(outcome.result().event());
             }
             return outcome.result();
         });

@@ -223,3 +223,21 @@ SPENT require NULL and clear `holder_since_utc` to 0.
   full possession (e.g. after the return sweep) mints a NEW durable event
   id. Crashes mid-occurrence are recoverable: the ACTIVE row + guard
   survive restarts (proven by the restart round-trip test).
+
+### Artifacts event occurrence — controller additions (ADR-0015, session 12)
+
+Two time-driven edges join the occurrence machine (both idempotent, sweep
+or admin driven):
+
+- duration elapsed (config `event.duration-minutes`) → sweep calls
+  `completeRebellion` (CAS on state ACTIVE) → COMPLETED, guard cleared,
+  reconquest possible;
+- trigger holder + telegraph elapsed + literal confirm → `executePurge`
+  claims `purge_executed_utc` (CAS NULL → now, one audit row in the same
+  transaction) → the ONLINE kill set runs at most once per occurrence,
+  forever — `PURGE_ALREADY_EXECUTED` is the typed no-op for every retry.
+
+The registry state machine is unchanged by the controller: every
+player-facing flow (capture click, pickup, chest take, destruction,
+voluntary return, spend) resolves onto the same ADR-0013 CAS transitions
+— the Bukkit events are routing, never authority.

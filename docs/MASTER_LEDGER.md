@@ -71,7 +71,12 @@ its owning module has tests passing in `./gradlew test`.
 | Recoverable loss + return pipeline (LOST/SPENT -> RETURNING -> ORIGIN) | rebellion-artifacts | tested | idempotent markLost (LOST_ALREADY), beginReturn gated on the configured delay AND no active event, completeReturn restores a fresh discoverable origin instance; both sweep steps individually idempotent CAS so a crashed sweep cannot double-apply; SPENT rides the same pipeline home (no permanent winner) |
 | Rebellion event: once-per-occurrence, copy-proof (rb_artifacts_events + singleton guard) | rebellion-artifacts | tested | trigger requires all three HELD by one player (copied artifacts cannot qualify structurally); guard CAS makes duplicates/races resolve EVENT_ALREADY_ACTIVE carrying the same occurrence; spendArtifacts all-or-none in one transaction (SPENT_CONFLICT typed); completeRebellion releases the guard — a new full possession mints a NEW durable event id |
 | Admin route + audit trail | rebellion-artifacts | tested | adminRoute recovers stuck states only (LOST/RETURNING -> HELD; ORIGIN refused — the realm must be conquered, not granted); rb_artifacts_audit appends one row per affected artifact per real mutation; no-ops write nothing |
-| Artifacts config contract (origin anchors, return delay, event toggle + scope) | rebellion-artifacts | tested | ArtifactsConfigTest (10): shipped config.yml pinned to the defaults factory; anchor/delay bounds; TEAM trigger scope is a loud unimplemented error (§5.5 separate-option rule) |
+| Artifacts config contract (origin anchors, return delay, event toggle + scope) | rebellion-artifacts | tested | ArtifactsConfigTest (18): shipped config.yml pinned to the defaults factory; anchor/delay bounds; TEAM trigger scope is a loud unimplemented error (§5.5 separate-option rule); controller values (materials, sweep, duration, reminder, purge bounds + STORED refusal) |
+| Protected-origin presentation + capture (ADR-0015 §1) | rebellion-artifacts | verified-on-Paper-26.3 | ItemDisplay+Interaction pair, PDC-tagged, self-healing reconcile (live proof: exactly one pair; killing one/both halves converges to 1+1 next sweep); capture = right-click through the capture CAS, inventory-full refusal; damage cancelled; /kill on a display is bypassed (measured) and healed by the sweep |
+| Physical item flows (ADR-0015 §2) | rebellion-artifacts | implemented (live-verify pending) | pickup/chest-take -> transfer or found (same-holder no-op); item removal (DESPAWN/DEATH/EXPLODE/OUT_OF_WORLD/DISCARD) -> markLost; hopper suction + crafting cancelled; chest storage legal; destruction = recoverable LOST (opposite of the dragons egg policy, now a documented decision) |
+| Rebellion observer + catastrophe surface (ADR-0015 §3) | rebellion-artifacts | implemented (server-side) | dumb qualification probe after every HELD transition (guard CAS dedups); trigger broadcast, join notice, config reminder + duration; sweep/admin completion |
+| Config-gated purge (ADR-0015 §4) | rebellion-artifacts | implemented (default-off) | quadruple runtime gate; once-per-occurrence purge_executed_utc CAS (schema v2) commits before the kill loop; ONLINE target set (STORED = loud unimplemented); holder spared per config; warning lead; typed PURGE_ALREADY_EXECUTED no-ops |
+| /artifact + /artifactadmin + placeholders | rebellion-artifacts | implemented (console-verified) | status/return/spend/purge with literal confirm keywords; admin list/info/route/audit/complete/events (boot-smoke rendered; the console caught the missing admin.info key before the suite did); artifact_state/holder/event_active placeholders (mirror reads, no origin exposure) |
 
 ## Roadmap (from master prompt §18)
 
@@ -83,7 +88,7 @@ its owning module has tests passing in `./gradlew test`.
 | 3 | Teams, chat, friendly-fire attribution | implemented + tested (unit level); module enable + migration live-verified; player flows (invites, chat) need interactive verification |
 | 4 | No-claim wards, calibrated distance, intel | implemented + tested (unit level); module enable + migration + persisted-ward load live-verified; km display disabled until calibrated; measured pipeline costs in docs/PERFORMANCE.md; ward walking/alert flows need interactive verification |
 | 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | spike delivered and executed live (ADR-0008: measured mount/steer/death/heal/fireball/persistence surface; bytecode-proven player-gated End fight); lineage registry + CAS idempotency delivered (ADR-0009); controller slice delivered (session 10): plugin wiring, pet controller, gateway observation (ADR-0014), egg protection, commands, placeholders, schema v2 — boot-verified on Paper 26.3 build 226; remaining interactive gates: client ride feel + vanilla first-victory emission (E4b) |
-| 6 | Three dimension artifacts + Rebellion event | persistence layer delivered (session 11, ADR-0013): dimension-keyed registry, instance-stamped possession CAS, recoverable loss + return pipeline, once-per-occurrence Rebellion event — 32 tests, real SQLite; controller phase (encounter structure, physical item flows, catastrophe effects, commands, placeholders) is next |
+| 6 | Three dimension artifacts + Rebellion event | persistence layer delivered (session 11, ADR-0013) + controller slice delivered (session 12, ADR-0015): protected self-healing origin presentation + capture, item flows (steal/destruction -> recoverable loss), Rebellion observer + broadcast surface, config-gated purge (default off), /artifact + /artifactadmin, placeholders — 53 module tests, boot-verified (v0 -> v2 in one boot); remaining: the decorative encounter structure (operator map work) and the interactive pass (capture/steal/trigger/purge with real players); health scars stay Phase 9 (needs profiles) |
 | 7 | Rare souls, rituals, tracking | planned |
 | 8 | Brewing progression, potion bags, automation | planned |
 | 9 | Prison, death scores, economy interface, rehab | planned |
@@ -254,3 +259,31 @@ Session additions (2026-10-28, artifacts persistence layer — session 11):
   (`%rebellion_artifact_*`) are controller-phase work gated on the
   interactive verification pass, exactly like ADR-0009 preceded the
   dragons controller.
+
+Session additions (2026-10-28, artifacts controller slice — session 12):
+
+- RebellionArtifacts is now the seventh installable jar: plugin wiring,
+  listeners, sweep, commands, placeholders and module health follow the
+  ADR-0011-proven boot pattern; the artifacts schema went v0 -> v2 in one
+  boot on the existing smoke-server sqlite.
+- The controller adds NO new registry state: every player-facing flow
+  resolves onto the session-11 CAS transitions. The only schema change
+  is the additive v2 purge stamp, and the append-only migration-set
+  guard is now pinned by test (a shrunk set after v1+v2 refuses loudly).
+- The boot smoke earned its keep twice again: the console caught
+  `admin.info` rendering as its own key (missing from messages.yml AND
+  from the test's pinned list — both fixed), and the live kill/heal
+  proof caught a real convergence defect (killing only the display
+  half orphaned a duplicate Interaction; the reconcile now clears
+  remaining halves and spawns one fresh pair, verified converging to
+  exactly 1+1).
+- Measured 26.3 API constraints recorded for the future: Material
+  isAir()/isItem() need RegistryAccess (no serverless); EntityRemoveEvent
+  is monitoring-only; /kill on non-living displays bypasses damage
+  events; empty servers keep anchor chunks unloaded, so presentations
+  deliberately wait for chunk load.
+- Honest scope: server-side + boot-level verification only — no player
+  joined the smoke server, nothing was captured, stolen, triggered or
+  purged live. The decorative encounter structure (the build around the
+  anchor) is operator map work; health scars are Phase 9 (profile
+  surface); dimension-instability *effects* need live feel-tuning.

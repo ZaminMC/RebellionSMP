@@ -98,6 +98,24 @@ public final class ArtifactsSchema {
                                 + "ON rb_artifacts_events (state)"));
     }
 
+    /**
+     * @return the v2 migration (ADR-0015 §4): the additive purge stamp on
+     *         the event row. The NULL → now compare-and-set makes the
+     *         world-wide kill exactly-once per occurrence.
+     */
+    public static MigrationSpec v2() {
+        return new MigrationSpec(2,
+                "artifacts v2: once-per-occurrence purge execution stamp "
+                        + "(ADR-0015)",
+                List.of("ALTER TABLE rb_artifacts_events "
+                        + "ADD COLUMN purge_executed_utc BIGINT NULL"));
+    }
+
+    /** @return every shipped migration, oldest first (Core refuses downgrades). */
+    public static List<MigrationSpec> migrations() {
+        return List.of(v1(), v2());
+    }
+
     private static String compact(String ddl) {
         return ddl.trim().replaceAll("\\s+", " ");
     }

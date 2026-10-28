@@ -262,3 +262,49 @@ restarted server in the same session): the Dragons jar shipped with an
 unexpanded `${version}` literal in `plugin.yml` (processResources expansion
 existed in every other module but Dragons had never shipped a descriptor),
 printing `RebellionDragons ${version} enabled`.
+
+## Session 12 checklist — artifacts controller (ADR-0015, boot-verified 2026-10-28)
+
+Serverless suite: **389 tests green** (api 8, core 44, items 91, teams 50,
+wards 86, dragons 57, artifacts 53 — up from 32 by 8 config, 4 messages,
+5 purge-selection, 5 service-IT additions), stable across a forced rerun.
+
+- [x] Config contract: per-dimension item materials (garbage + AIR
+      refused, legal override accepted), sweep/duration/reminder bounds,
+      purge defaults (off, ONLINE, spare-holder), STORED target set is a
+      loud unimplemented refusal, min-delay/warning bounds.
+- [x] `ArtifactServiceIT` purge additions: once-per-occurrence claim
+      (`PURGE_EXECUTED` → retried `PURGE_ALREADY_EXECUTED` no-op), the
+      stamp survives restart and blocks re-execution, completion preserves
+      the stamp, unknown events refuse NOT_FOUND, and the append-only
+      migration-set guard is pinned (a shrunk set after v1+v2 is a loud
+      refusal; re-apply is a no-op).
+- [x] `PurgeSelectionTest` (pure): holder spared per config, explicit
+      rule may include the holder, holder-offline, empty server,
+      deterministic order.
+- [x] `ArtifactsMessagesTest`: strict-parse + 1:1 key pin (65 keys) —
+      the boot smoke caught the console rendering `admin.info` before the
+      test did (the pinned list had the same gap; both fixed same day).
+- [x] Boot smoke (Paper 26.3 build 226, upgrade-style over the dev.5-era
+      server): 7 jars enable; artifacts schema v0 → v2 in one boot on the
+      existing sqlite; 3 rows seeded (ORIGIN, no holder); restart no-op
+      (no re-migration, no re-extraction, admin-edit-wins fallback warned
+      precisely for the one key the older extraction lacked); console
+      surface renders (`artifactadmin list/info/events`, module health
+      `operational`); graceful reverse-order shutdown; sqlite afterwards:
+      guard clear, 0 events, 0 audit rows (the seed writes nothing).
+- [x] Presentation reconcile proven live with `forceload`: on an empty
+      server the anchor chunk is not loaded → the pair correctly waits;
+      with the chunk loaded the sweep spawns exactly one ItemDisplay +
+      Interaction; killing one half (and both halves) converges back to
+      exactly 1+1 on the next sweep (a real convergence defect was caught
+      live and fixed: a partial pair used to orphan a duplicate
+      Interaction).
+- [x] `/kill` on a non-living display bypasses damage events (measured):
+      the protected-origin guarantee holds through the self-healing
+      reconcile — the row, not the entity, is the authority.
+- Remaining interactive gates (documented, honest): a player capturing
+  from the presentation (right-click → CAS → stamped item), the
+  steal/destruction/chest flows through real inventories, the trigger
+  broadcast on a real third capture, the reminder/duration cadence under
+  a live occurrence, and the purge kill loop with real online players.

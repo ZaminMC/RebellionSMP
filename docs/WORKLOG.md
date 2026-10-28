@@ -988,3 +988,109 @@ flipped, then the End for the E4b vanilla first-victory emission), or
 the artifacts controller phase (encounter structure, physical item
 flows, catastrophe effects, commands) — the persistence contract it
 rides is now committed and green.
+
+## 2026-10-28 — Session 12: the artifacts controller slice — RebellionArtifacts becomes the seventh installable plugin (ADR-0015)
+
+**Session context**
+
+Continued straight off session 11's committed persistence contract. The
+documented next-task choice was the interactive dragons pass (blocked:
+needs a live player) or the artifacts controller phase — the controller
+phase proceeded, the same serverless-fallback discipline as before, with
+every interactive gate documented honestly.
+
+**Protocol**
+
+Pulled develop (2e81bce, already up to date), master prompt md5
+a84a5323 unchanged, baseline build 368 tests green.
+
+**Decisions first (ADR-0015, new)**
+
+- §1 the origin presentation is an ItemDisplay + Interaction pair,
+  tagged, self-healing: the sweep reconciles loaded anchor chunks to
+  exactly one pair per ORIGIN row; the pair is presentation, never
+  state; no decorative encounter structure ships (recovery logic is the
+  reconcile + return pipeline — the structure is operator map work).
+- §2 item flows: possession changes ride the CAS (pickup/chest-take ->
+  transfer|found), destruction means LOST not protection (the deliberate
+  opposite of the dragons egg policy — artifacts are infinite-cycle
+  assets with a return pipeline), hopper suction + crafting cancelled,
+  chest storage legal.
+- §3 the observer is a dumb post-HELD probe; the guard CAS does all
+  dedup. Catastrophe surface in-slice: trigger broadcast, join notice,
+  reminder + duration (config), sweep/admin completion.
+- §4 the purge: config-off default, ONLINE-only target set (STORED =
+  loud unimplemented), holder spared, telegraph, literal confirm,
+  warning lead, and once-per-occurrence by the schema-v2
+  `purge_executed_utc` CAS — the stamp commits before any player is
+  touched.
+
+**Implemented (14 new classes + plugin.yml + messages.yml + v2)**
+
+- Schema v2: additive `ALTER TABLE rb_artifacts_events ADD
+  purge_executed_utc`; store CAS_PURGE + purgeEvent; RebellionEvent
+  carries the stamp; service `executePurge` (typed
+  PURGE_EXECUTED / PURGE_ALREADY_EXECUTED); migrations() list; the
+  append-only migration-set guard pinned by test.
+- Config v2: per-dimension item materials, sweep interval (5..600 s),
+  event duration (5..1440 min) + reminder (0..1440), purge section
+  (enabled/target-set/spare-holder/min-delay/warning, every bound
+  validated; STORED and TEAM are loud unimplemented refusals).
+- `ArtifactItems` (PDC artifact_id + live instance, catalog-rendered
+  name/lore), `ArtifactNames` (localizable short names).
+- `OriginPresentation` + `OriginListener`: spawn/reconcile/protect/capture;
+  `ArtifactFlowListener`: pickup, chest-take, removal->lost, hopper +
+  craft cancels; `RebellionObserver`: probe + broadcast + join notice.
+- `ArtifactsSweep`: return pipeline (begin/complete), presentation
+  reconcile, duration completion, reminder cadence.
+- `PurgeExecutor`: refusal pre-flight (readable, state-free) + armed
+  execution (warning -> stamp CAS -> ONLINE kill loop, holder spared).
+- `ArtifactsPlugin` (7th jar, POSTWORLD, config-owned sweep cadence),
+  `/artifact` + `/artifactadmin` + tab completion, 3 placeholders,
+  messages.yml (65 keys, strict-pinned 1:1).
+
+**Verified**
+
+- Suite: **389 tests green** (artifacts 32 -> 53: +8 config, +4
+  messages, +5 purge-selection, +5 service-IT), stable across a forced
+  rerun; the six sibling modules untouched.
+- Boot smoke (upgrade-style, dev.5-era server -> dev.7 jars): 7 jars
+  enable; artifacts v0 -> v2 in one boot; 3 rows seeded ORIGIN; restart
+  no-op; admin-edit-wins fallback warned precisely for the one key the
+  older extraction lacked; console renders list/info/events; module
+  health operational; graceful reverse-order shutdown; sqlite after:
+  guard clear, 0 events, 0 audit rows.
+- Live reconcile proof (forceload): empty server -> pair correctly
+  waits; chunk loaded -> exactly one pair spawns; kill one half ->
+  converged to 1+1 (after fixing the orphan bug the proof caught);
+  kill both -> fresh pair 1+1.
+
+**Caught live and fixed during the smoke**
+
+1. `admin.info` rendered as its own key: missing from messages.yml —
+   and from the test's pinned key list (the 1:1 pin had the same gap).
+   Both fixed; the ADR-0012 per-key fallback behaved exactly as
+   designed in the meantime.
+2. Partial-pair orphan: killing only the display made the next sweep
+   spawn a fresh PAIR, orphaning a duplicate Interaction. The reconcile
+   now clears remaining halves whenever either half is missing and
+   spawns one fresh pair — convergence to exactly 1+1 proven live.
+
+**Honest scope**
+
+No player joined: capture, steal, destruction, third-capture trigger,
+reminder cadence and the purge kill loop are server-side implemented
+and boot-verified only. The decorative encounter structure is operator
+map work; maximum-health scars are Phase 9 (profile surface);
+dimension-instability *effects* (particles, ambient) need live
+feel-tuning before they earn defaults.
+
+**Next task**
+
+The interactive pass (now covering both modules): one player on the
+smoke server — dragons ride feel (ride.enabled flip, E1/E2 client
+halves, E4b vanilla first-victory emission) AND the artifacts player
+flows (capture from the presentation, drop/steal/chest/destruction,
+the third-capture trigger broadcast, the purge with a real online
+set). Serverless alternative: Phase 7 groundwork (rare souls, rituals,
+tracking) or the items-module remaining surface.

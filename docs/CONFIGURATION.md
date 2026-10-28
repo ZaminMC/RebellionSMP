@@ -340,3 +340,32 @@ file and the `ArtifactsConfig.defaults()` factory to it):
   action and encounter tuning are deliberately absent until the
   controller phase exists (the same discipline DragonsConfig held before
   ADR-0008 landed).
+
+### RebellionArtifacts controller values (ADR-0015, session 12)
+
+```yaml
+artifacts:
+  items:                    # physical item material per dimension
+    overworld: { material: HEART_OF_THE_SEA }
+    nether: { material: NETHER_STAR }
+    end: { material: ENDER_EYE }
+  sweep:
+    interval-seconds: 30    # 5..600 - return pipeline + reconcile + event
+  event:
+    duration-minutes: 60    # 5..1440 - ACTIVE occurrence auto-completes
+    reminder-minutes: 10    # 0..1440, 0 = off (join notice always renders)
+  purge:                    # the world-wide kill (§5.5), default OFF
+    enabled: false
+    target-set: ONLINE      # ONLINE only; STORED = loud unimplemented error
+    spare-holder: true      # never accidentally kill the activating holder
+    min-delay-minutes: 10   # telegraph between trigger and confirmation
+    warning-seconds: 30     # 5..600 - broadcast lead before the kill loop
+```
+
+Validation notes: materials resolve through `Material.matchMaterial` and
+reject the air constants; `Material.isAir()/isItem()` are deliberately
+avoided (they route through RegistryAccess, which does not exist
+serverless — a Paper 26.3 limit recorded in ADR-0015); item-ness is
+enforced where the ItemStack is built (boot-smoke verified). Every bound
+is checked at load with the exact key in the issue; invalid values fail
+the module enable loudly, never silently stretch.

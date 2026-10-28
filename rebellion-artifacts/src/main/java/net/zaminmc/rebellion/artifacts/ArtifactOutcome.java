@@ -41,6 +41,12 @@ public enum ArtifactOutcome {
     /** Spending refused: not all three artifacts are HELD by the trigger
      *  holder (includes a retried spend after success — all-or-none held). */
     SPENT_CONFLICT,
+    /** The world-wide purge executed: this call won the once-per-occurrence
+     *  stamp flip (ADR-0015 §4) and must run the kill loop. */
+    PURGE_EXECUTED,
+    /** Idempotent purge no-op: this occurrence's purge already ran — the
+     *  kill set can never execute twice. */
+    PURGE_ALREADY_EXECUTED,
     /** Admin routed a stuck (LOST/RETURNING) artifact to a player. */
     ROUTED,
     /** Presented instance stamp does not match the row's live stamp — a

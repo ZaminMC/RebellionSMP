@@ -1,8 +1,8 @@
 # ADR-0013 — Dimension-artifact registry: three dimension-keyed slots, instance-stamped possession, idempotent Rebellion event
 
-Date: 2026-10-28 · Status: accepted (persistence layer implemented + tested; the
-encounter/structure, physical item flows, catastrophe effects and commands are
-controller-phase work gated on interactive verification)
+Date: 2026-10-28 · Status: accepted (persistence layer implemented + tested;
+the controller slice — presentation, item flows, purge, commands — landed in
+ADR-0015 / session 12; player-level flows remain interactive gates)
 
 ## Context
 

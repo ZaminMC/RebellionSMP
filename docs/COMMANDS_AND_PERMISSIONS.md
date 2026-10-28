@@ -241,3 +241,43 @@ Nothing in the admin family mints lineages. The only mint path is
 
 Privacy is structural: viewers see only their own lineage; all reads are
 in-memory mirror reads, never per-request SQL.
+
+## RebellionArtifacts (Phase 6, controller slice — ADR-0015)
+
+### /artifact — the player surface
+
+| Command | Behavior |
+|---|---|
+| `status` | The three rows (localized short name, state, holder, since) + the active occurrence line |
+| `return confirm` | Voluntary surrender of the one held live artifact (HELD → RETURNING; the live stack is removed only after the CAS commits) |
+| `spend confirm` | The overpowering action: ACTIVE occurrence + trigger holder only; all three rows HELD→SPENT in one all-or-none transaction, the three live stacks die with the superseded stamps |
+| `purge confirm` | The config-gated world-wide kill: quadruple runtime gate (occurrence + trigger holder + telegraph elapsed + literal confirm), global warning leads the kill loop by `warning-seconds`, the once-per-occurrence stamp makes it structurally unrepeatable |
+
+Confirm keywords are literals — no free text from the command line is ever
+executed (§5.5 command-injection rule). Eligibility is always re-verified
+service-side through the CAS; the command layer only routes and renders.
+
+### /artifactadmin — audited administration
+
+| Command | Behavior |
+|---|---|
+| `list` | The three rows with states and holders |
+| `info <artifact>` | Full row detail: id, live instance, origin anchor, state, holder |
+| `route <artifact> <player>` | Recovers a stuck LOST/RETURNING row to an online player with a fresh instance; ORIGIN is refused (the realm must be conquered, never granted) and HELD is not the admin's to move |
+| `audit <artifact>` | The append-only audit trail (CAPTURE/TRANSFER/LOST/FOUND/RETURN_*/ADMIN_ROUTE/REBELLION_*/SPEND/PURGE rows) |
+| `complete confirm` | Force-completes the ACTIVE occurrence (guard cleared, reconquest opens) |
+| `events` | Occurrence history with the purge stamp per event |
+
+Permissions: `rebellion.artifacts.use` (default true — possession logic is
+service-enforced), `rebellion.artifacts.admin` (default op).
+
+### PlaceholderAPI placeholders (expansion `rebellion`) — artifacts
+
+| Placeholder | Value |
+|---|---|
+| `%rebellion_artifact_state_<key>%` | ORIGIN/HELD/LOST/RETURNING/SPENT (`<key>`: overworld/nether/end) |
+| `%rebellion_artifact_holder_<key>%` | recorded holder UUID, or empty |
+| `%rebellion_artifact_event_active%` | `true`/`false` |
+
+Privacy: the protected-origin coordinates are never exposed through
+placeholders; all reads are in-memory mirror reads.
