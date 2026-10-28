@@ -1447,3 +1447,80 @@ a NEW SCALAR key in a future bundled config.yml will not apply to existing
 installs (Bukkit scalar reads ignore defaults) — modules must keep shipping
 method-arg fallbacks matching the bundled file, and the boot smoke covers
 the clean-first-boot case per release.
+
+## Session 16 — Phase 8 groundwork: the alchemy persistence layer (ADR-0019)
+
+**Scope.** `rebellion-alchemy` joins the build as the Phase 8 groundwork
+module (serverless, no plugin descriptor — the ADR-0009/0013/0016
+precedent a fourth time). Everything in master prompt §5.7 that is *state*
+is pinned in schema, service and tests; everything that needs a live
+inventory, a brewing stand or a live player stays controller-phase.
+
+**Research first (§4).** The potion config vocabulary was proven before
+implementation, against the pinned paper-api 26.3 build 226 jar:
+`PotionType` is a real enum whose static initializer only computes
+NamespacedKey constants — jshell probe resolves all 46 constants with the
+jar + adventure + guava on the classpath; `PotionEffectType` is an
+abstract class whose static fields are registry-bound instances (javap),
+so serverless use would crash. Decision: config, validation and rule rows
+speak `PotionType` (enum-constant lookup, the Material/EntityType
+discipline); the live PotionType→PotionEffectType mapping is
+controller-phase.
+
+**What shipped.** Five tables under module key `alchemy` (portable DDL,
+UUID keys, enum-string states, every mutation a CAS or PK-guarded insert):
+
+- `rb_alchemy_progress` — the atomic XP accumulate; **the level is derived
+  by the pure `Leveling` walk on every read** (cost(level) =
+  base+(level−1)·growth, clamped), never stored — the derived-expiry
+  discipline applied to progression. Per-source idempotent awards: the
+  `xp:<player>:<source>` event row is inserted *before* any mutation (the
+  gate), then insert-or-accumulate, then the outcome column is finalized
+  to LEVEL_UP/XP inside the same transaction. The concurrent-first-award
+  PK violation is classified into the accumulate path.
+- `rb_alchemy_unlocks` — the PK-idempotent two-path unlock ledger. The
+  POWER/EFFICIENCY separation is structural: kind-mismatched config
+  fields are refused at load ("efficiency must not quietly add combat
+  strength" enforced by the record shape); prerequisites must reference
+  existing keys and form no cycles (three-color DFS at config load).
+- `rb_alchemy_claims` — the ADR-0016 claim protocol generalized with a
+  purpose discriminator (UNLOCK_PURCHASE / AUTO_CONSUME): reserve (level
+  gate + prerequisites + race guard / ownership + cooldown authority) →
+  controller removes items under the reservation → commit all-or-none
+  (CAS + unlock row / `last_fired_utc` stamp + audit). The admin grant
+  path is audited and idempotent; a grant landing between reserve and
+  commit still spends the claim (durable ALREADY_OWNED outcome).
+- `rb_alchemy_rules` — player-defined auto-consumption under the operator
+  policy family: trigger whitelist (with per-trigger HEALTH_BELOW
+  bounds), PotionType whitelist, the anti-bot cooldown floor, priority
+  range, per-player cap over live rows. Deterministic conflict order
+  (priority, created, rule id); ownership-guarded idempotent toggle;
+  stamped removal keeps forensics (ids consumed forever); `last_fired_utc`
+  is the cooldown authority, stamped only by committed executions.
+- `rb_alchemy_events` — append-only audit; deterministic composed keys;
+  idempotent by construction.
+
+**Evidence.** Full suite **514 tests / 0 failures** (counted from the
+XMLs; forced fresh execution with `--rerun-tasks --no-build-cache`, 44 s),
+up from 459 — 55 new (26 real-SQLite IT + 20 config + 9 pure leveling).
+The four first-run failures were all test-side expectation bugs, plus one
+contract improvement taken from them: `removeAutoRule` now resolves an
+already-removed rule to the idempotent `RULE_REMOVE_NOOP` instead of
+RULE_NOT_FOUND (removal is explicitly idempotent in the ADR; toggle and
+reserve still treat dead rules as not found). Module jars untouched: no
+plugin.yml, boot smoke unchanged (nothing new installs), release
+pipeline builds + tests the module and reports "not yet installable".
+
+**Docs.** ADR-0019; DATA_MODEL (five-table section); STATE_MACHINES
+(claim lifecycle incl. the FIRED_UNSTAMPED mid-flight case, auto-rule
+lifecycle, XP derivation); ARCHITECTURE (module section); TEST_PLAN
+(suite inventory + the two caught defects); MASTER_LEDGER (feature rows +
+Phase 8 roadmap row + known-limitations session note); README (new row +
+the RebellionRPG row refreshed in passing — it had rotted at "not
+installable yet" through the session-14/15 commits).
+
+**Honest scope.** Bag items, the inventory safety listeners, brewing-stand
+wiring, live trigger evaluation (health/fire/portal/fall), commands,
+placeholders and menus are all controller-phase. No gameplay is claimed
+verified. Next implementable slice: the alchemy controller, or operator
+side-work (wandering_soul calibration, dragons ride-feel report).

@@ -355,3 +355,68 @@ wards 86, dragons 57, artifacts 53 — up from 32 by 8 config, 4 messages,
   player-level flows. The controller phase (souls, inventory, signals,
   commands, placeholders) will gate on the interactive pass like every
   module before it.
+
+## Alchemy persistence layer (rebellion-alchemy, ADR-0019 — serverless, session 16)
+
+- [x] `AlchemyServiceIT` (real SQLite through Core's actual DatabaseService +
+      MigrationRunner; injected clock — deterministic): XP awards — fresh
+      accumulate with the derived level-up detail (`level 1->2`), duplicate
+      source resolving to the `XP_NOOP` success carrying live progress with
+      nothing touched, the pre-inserted-row path exercising the atomic
+      accumulate (the concurrent-first-award PK classification), the level
+      clamp at a maxed curve (XP past max is still XP), bad
+      amount/source-key refusals; unlock purchases — the happy
+      reserve→commit path with the grant's claim linkage, refusal
+      families (unknown/disabled/level-gate/prerequisite/race-guard/
+      already-owned), the refund release with digest retention +
+      idempotent no-op, claim ownership enforcement surviving rejected
+      access, the stale sweep releasing only old reservations with
+      per-claim audit, the admin grant path (idempotent, audited,
+      null-claim rows, unlock-unknown refusal, still refusing a
+      purchase), and the admin-grant-between-reserve-and-commit race
+      spending the claim with the `ALREADY_OWNED` outcome; auto-rules —
+      the deterministic conflict order across priorities, every policy
+      refusal (disabled trigger, non-whitelisted potion, threshold bounds,
+      threshold-on-non-threshold trigger, cooldown floor, priority range,
+      storage), the per-player cap counting live rows only, idempotent
+      defines by rule id carrying the original, ownership-guarded
+      idempotent toggles, stamped removals keeping forensics (removed ids
+      consumed, removed rules refusing toggle/reserve); auto-consume
+      executions — the full protocol (reserve, drink race guard, commit
+      stamping `last_fired_utc`, cooldown refused until it elapses, the
+      next cycle firing), re-delivery carrying the original FIRED
+      outcome, ownership/state guards, and the mid-flight removal
+      committing unstamped with the `FIRED_UNSTAMPED` audit; and the
+      restart round-trip (fresh DatabaseService over the same file:
+      progress re-deriving the level, the unlock ledger, the cooldown
+      stamp refusing re-trigger, the audit trail, new work resolving).
+- [x] `AlchemyConfigTest`: the documented YAML and `defaults()` pinned to
+      each other; the four missing-section reports; unlock key grammar;
+      brewing bounds; unknown kind; the POWER/EFFICIENCY field-separation
+      refusals in both directions; the full-cost-reduction ban (mints free
+      potions); power grant bounds (amplifier/duration/potion-type
+      enum); required-level cross-check against the curve max; cost
+      bounds (material/amount/empty); unknown prerequisite references;
+      prerequisite cycle rejection including self-references; a real DAG
+      loading clean; bag bounds and cross-references; policy bounds
+      (cooldown floor/rule cap/priority range); explicit per-trigger
+      declaration with unknown-trigger rejection; HEALTH_BELOW threshold
+      bounds including inverted ranges; potion whitelist enum validation
+      and the empty-list refusal; defaults consistency (FALLING ships
+      disabled deliberately, POISON absent from the whitelist); full
+      config-path issue strings.
+- [x] `LevelingTest`: the linear cost walk, the level clamp, the
+      `totalXpForLevel` inverse round-trip for every level of the shipped
+      curve, `xpIntoLevel`/`nextLevelCost`, the zero-growth curve, the
+      projection fields, and the new-player projection.
+- Caught and fixed during the slice (test-first evidence): the XP award's
+  finalize step originally had no way to write the LEVEL_UP outcome into
+  the gate row (restructured as insert-gate → mutate → finalize-outcome
+  inside one transaction); removal originally resolved an already-removed
+  rule to RULE_NOT_FOUND through the live pre-flight (restructured to a
+  genuinely idempotent `RULE_REMOVE_NOOP` — "nothing owed", the better
+  contract for an explicitly idempotent operation).
+- Not yet applicable (no plugin surface): boot smoke, messages catalog,
+  player-level flows. The controller phase (bags, brewing-stand wiring,
+  live triggers, commands, placeholders) will gate on the interactive
+  pass like every module before it.

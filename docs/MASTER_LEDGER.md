@@ -119,6 +119,19 @@ Player-level flows (reagent feel, signal pulse timing, live spawner on a
 calibrated map, opening /ritualguide as a player) remain interactive —
 honestly unclaimed until a player exercises them.
 
+## Alchemy persistence layer (rebellion-alchemy, Phase 8 groundwork — ADR-0019)
+
+| Feature | Owning module | Status | Notes |
+|---|---|---|---|
+| Idempotent brewing XP with derived levels | rebellion-alchemy | tested | AlchemyServiceIT over real SQLite; the `xp:<player>:<source>` event PK is the gate (inserted before any mutation — a replayed source is a clean no-op carrying live progress); first-row insert or atomic accumulate (concurrent-first-award PK classified into the accumulate); level derived by the pure Leveling walk on every read — no stored column, no drift, rebalances apply on next read; LEVEL_UP outcomes durable in the audit row |
+| Two-path unlock ledger (POWER / EFFICIENCY) | rebellion-alchemy | tested | PK-idempotent grants (a fact, never edited); the config shape separation is structural — POWER fields on EFFICIENCY definitions and vice versa are refused at load, so efficiency can never quietly add combat strength; amplifier ceiling 4, duration multiplier ≤ 5, full cost-reduction refused (free potions) |
+| Unlock purchases through the claim protocol | rebellion-alchemy | tested | reserve→inventory→all-or-none commit (ADR-0016 discipline): derived-level gate, prerequisites answered from rows, race guard, digest as refund evidence, typed refusals, commit noop carrying the original outcome, admin grant path (idempotent + audited; a grant between reserve and commit still spends the claim) |
+| Player-defined auto-consumption rules | rebellion-alchemy | tested | strict operator policy (trigger whitelist incl. per-trigger HEALTH_BELOW bounds, PotionType whitelist, cooldown floor, priority range, per-player cap over live rows); deterministic conflict order (priority, created, id); ownership-guarded idempotent toggle; stamped removal keeping forensics (ids consumed forever) |
+| Atomic auto-consume executions | rebellion-alchemy | tested | execution claims (reserve → drink under reservation → commit): the `last_fired_utc` stamp commits all-or-none with the claim CAS — "atomic potion/cost consumption and safe fallback"; cooldown authority answered from rows, never scheduler memory; mid-flight disable/removal commits unstamped with honest FIRED_UNSTAMPED audit |
+| Stale-claim sweep with refund digests | rebellion-alchemy | tested | crash-recovery path identical to RPG: RESERVED claims older than the floor released in one CAS, per-claim audit, digest retained |
+| Config contract (four families) | rebellion-alchemy | tested | AlchemyConfigTest + LevelingTest; brewing curve / unlocks / bags / auto-rules all collect-all validated; prerequisite references + cycles rejected; PotionType enum vocabulary serverless-proven (ADR-0019 research: PotionEffectType statics are registry-bound — controller phase) |
+| Module joins the build (serverless, no plugin.yml) | rebellion-alchemy | tested | ADR-0009/0013/0016 precedent a fourth time; release pipeline builds + tests it, reports "not yet installable" |
+
 ## Roadmap (from master prompt §18)
 
 | Phase | Scope | Status |
@@ -131,7 +144,7 @@ honestly unclaimed until a player exercises them.
 | 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | spike delivered and executed live (ADR-0008: measured mount/steer/death/heal/fireball/persistence surface; bytecode-proven player-gated End fight); lineage registry + CAS idempotency delivered (ADR-0009); controller slice delivered (session 10): plugin wiring, pet controller, gateway observation (ADR-0014), egg protection, commands, placeholders, schema v2 — boot-verified on Paper 26.3 build 226; remaining interactive gates: client ride feel + vanilla first-victory emission (E4b) |
 | 6 | Three dimension artifacts + Rebellion event | persistence layer delivered (session 11, ADR-0013) + controller slice delivered (session 12, ADR-0015): protected self-healing origin presentation + capture, item flows (steal/destruction -> recoverable loss), Rebellion observer + broadcast surface, config-gated purge (default off), /artifact + /artifactadmin, placeholders — 53 module tests, boot-verified (v0 -> v2 in one boot); remaining: the decorative encounter structure (operator map work) and the interactive pass (capture/steal/trigger/purge with real players); health scars stay Phase 9 (needs profiles) |
 | 7 | Rare souls, rituals, tracking | persistence layer delivered (session 13, ADR-0016): reserved ritual claims, PK-idempotent discovery ledger, precision-stamped tracking sessions with mask degradation + derived expiry, counter-ritual effects, encounter ledger (cap/cooldown/TTL/one-winner rewards), event audit; controller slice delivered (session 14, ADR-0017): soul spawner (born quiet until world calibration), /ritual claim-protocol driver, REGION signal rendering, /rpgadmin audit, placeholders, reconciliation sweep — 8th installable plugin, boot-verified; menu surface delivered (session 15, ADR-0018): per-viewer menu placeholder rendering + /ritualguide ritual guide; implementable scope COMPLETE — remaining: the interactive pass only (reagent feel, signal timing, wandering_soul calibration) |
-| 8 | Brewing progression, potion bags, automation | planned |
+| 8 | Brewing progression, potion bags, automation | persistence layer delivered (session 16, ADR-0019): derived brewing levels + idempotent XP, the two-path unlock ledger (POWER/EFFICIENCY) with claim-protocol purchases + prerequisite gates, potion-bag tier definitions, player-defined auto-consumption rules under a strict operator policy, atomic execution claims (consumption + cooldown stamp all-or-none), append-only audit — 55 module tests green, full suite 514; remaining: the controller slice (bag items + inventory safety events, brewing-stand wiring, live trigger evaluation, commands, placeholders, menus) and the interactive pass |
 | 9 | Prison, death scores, economy interface, rehab | planned |
 | 10 | Cosmetics-only rewards, optional map/voice integrations | planned |
 | 11 | Hardening + release candidate | planned |
@@ -171,6 +184,26 @@ honestly unclaimed until a player exercises them.
   the boot smoke (admin-edit reload, broken-template fallback, restart
   byte-identity). Remaining honest gap: player-visible rendering (menus,
   invites, alerts to actual players) is still part of the interactive pass.
+
+Session additions (2026-10-28, alchemy persistence layer — ADR-0019):
+
+- The alchemy module has NO plugin wiring yet (no plugin.yml, boot,
+  commands or listeners): installing it as a server plugin is not a
+  supported state until the controller phase lands (ADR-0009/0013/0016
+  precedent a fourth time). The persistence layer is exercised through its
+  tested service surface (`AlchemyServiceIT`, real SQLite).
+- Potion-bag items (minting, opening, and every inventory safety rule —
+  nesting, shift-click, death, crafting, drag, cursor, close) are
+  controller-phase listeners; this layer ships only the validated bag
+  tier definitions the controller will mint against.
+- The PotionType→PotionEffectType live mapping, brewing-stand event
+  wiring (BrewEvent) and the deterministic XP source-key composition are
+  controller-phase; persistence accepts grammar-checked opaque source
+  keys and enforces per-source idempotency.
+- README hygiene fixed in passing: the RebellionRPG row had rotted at
+  "not installable yet" through the controller (ADR-0017) and menu
+  (ADR-0018) commits — refreshed to the eighth-installable-plugin
+  reality.
 
 Session additions (2026-10-28, dragons persistence layer):
 

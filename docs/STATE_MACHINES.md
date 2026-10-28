@@ -327,3 +327,60 @@ one-winner rewards — is answered from these rows, never scheduler memory.
 Crash recovery: every transition is an individually idempotent CAS that
 commits with its audit row; a crash leaves the pre- or post-transition
 state — both valid re-entry points.
+
+## Alchemy claim lifecycle (implemented: rebellion-alchemy AlchemyService, ADR-0019)
+
+One state machine per claim row (`rb_alchemy_claims.state`), shared by both
+inventory-spanning operations with a `purpose` discriminator
+(UNLOCK_PURCHASE / AUTO_CONSUME). This is the ADR-0016 ritual-claim
+discipline generalized: the database is the authority and reserves first;
+the controller removes physical items only under a live reservation; the
+commit CASes the claim together with the operation's effect row and audit
+event, all-or-none.
+
+```
+ reserveUnlock / reserveAutoConsume (tx: all guards from rows)
+   (nothing) ──────► RESERVED ──┬── commitUnlock / commitAutoConsume (CAS + effect rows + audit, one tx) ──► COMMITTED
+                               └── releaseReservation / releaseStaleClaims sweep (CAS + audit) ──► RELEASED
+```
+
+| From | Event | To | Guard (all inside one transaction) | Idempotency |
+|---|---|---|---|---|
+| — | `reserveUnlock` | RESERVED | definition enabled + derived level >= required + every prerequisite owned + not owned + no open reservation | typed refusals (UNKNOWN/DISABLED/LEVEL_TOO_LOW/PREREQUISITE_MISSING/ALREADY_OWNED/RESERVATION_HELD) |
+| — | `reserveAutoConsume` | RESERVED | rule exists + owned + live + enabled + `last_fired + cooldown <= now` + one execution reservation per rule | typed refusals (RULE_NOT_FOUND/ARGUMENT_INVALID/RULE_NOT_ACTIVE/COOLDOWN_ACTIVE/RESERVATION_HELD) |
+| RESERVED | `commitUnlock` | COMMITTED | CAS `state='RESERVED'` + PK-guarded unlock insert + audit, one tx | re-delivery → `COMMIT_NOOP` carrying the original outcome (read from the event row); an admin grant that landed between reserve and commit still spends the claim (outcome `ALREADY_OWNED`) |
+| RESERVED | `commitAutoConsume` | COMMITTED | CAS claim + `last_fired_utc` stamp + audit, one tx | re-delivery → `COMMIT_NOOP`; a rule disabled/removed mid-flight commits unstamped (outcome `FIRED_UNSTAMPED` — the potion was consumed under the reservation) |
+| RESERVED | `releaseReservation` | RELEASED | CAS + audit with reason | second release → `RELEASE_NOOP` |
+| RESERVED | stale sweep | RELEASED | `state='RESERVED' AND created_utc <= floor` | re-runs no-ops; digest retained on the row as refund evidence |
+
+## Alchemy auto-rule lifecycle (implemented: rebellion-alchemy, ADR-0019)
+
+Player-defined rules are opt-in, policy-gated and audited. Removal stamps
+instead of deleting; the id is consumed forever (PK), so re-defining a
+removed id resolves to `RULE_EXISTS` carrying the original row.
+
+```
+ defineAutoRule (policy: trigger whitelisted + potion whitelisted + threshold in
+                 bounds + cooldown >= floor + priority in range + per-player cap)
+   (nothing) ──► LIVE{enabled|disabled} ── removeAutoRule (stamp) ──► REMOVED (kept)
+                     ▲└──────── toggleAutoRule (ownership CAS) ────────┘
+```
+
+Resolution set = enabled, non-removed rows ordered by
+(priority, created_utc, rule_id) — the deterministic conflict order; the
+controller fires at most one rule per trigger per cycle from it. The
+cooldown authority is `last_fired_utc`, stamped only by committed
+executions — "never an infinitely replenishing potion bot" is answered by
+the policy floor at define time plus this row-guarded stamp, never by
+scheduler memory.
+
+## Brewing XP derivation (implemented: rebellion-alchemy, ADR-0019)
+
+There is no level state machine on purpose: `level = f(total_xp, curve)` is
+a pure walk (`cost(level) = base + (level−1)·growth`, clamped at max-level)
+re-derived on every read. XP awards are idempotent per (player, source):
+the audit event `xp:<player>:<source>` is inserted *before* any mutation
+(the gate), the progress row is inserted-or-accumulated atomically, and the
+pre/post reads bracket the accumulate so the event outcome column records
+LEVEL_UP with the honest `from→to` pair — all in one transaction, so a
+crash can never double-award or leave an un-gated mutation.

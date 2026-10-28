@@ -377,3 +377,82 @@ despawn`, `session:<uuid>:revoke`. Columns: `player_uuid CHAR(36) NULL`,
 `type VARCHAR(32)`, `detail VARCHAR(255)`, `outcome VARCHAR(16)` (the
 durable commit outcome — what re-delivery reads back), `at_utc BIGINT`.
 Idempotent by construction; written inside the mutation's transaction.
+
+## Alchemy module (module key `alchemy`, migration v1 — ADR-0019)
+
+Five tables under the `rb_alchemy_` prefix; enum-string states, server-issued
+UUID keys, no auto-increment, portable SQLite/MySQL DDL. All mutations are
+compare-and-sets or PK-guarded inserts; every mutation transaction also
+writes its audit row into `rb_alchemy_events`. The potion vocabulary is
+`PotionType` (a real enum, serverless-resolvable — proven against the pinned
+paper-api 26.3 jar; `PotionEffectType` is registry-bound and stays
+controller-phase).
+
+### rb_alchemy_progress — the atomic XP accumulate
+
+`PRIMARY KEY (player_uuid)` — one row per brewing player: `total_xp BIGINT`,
+`updated_utc BIGINT`. **The level is derived, not stored**: the pure
+`Leveling` walk (`cost(level) = base + (level−1)·growth`, clamped at
+max-level) computes it from `total_xp` on every read, the same discipline as
+the RPG derived expiry — no level column can drift, no sweep can forget to
+recompute, and a curve rebalance applies on the next read with zero
+migration. Fresh awards either INSERT the first row or use the atomic
+accumulate `total_xp = total_xp + ?` (single-statement read-modify-write);
+the concurrent-first-award PK violation is classified into the accumulate
+path, never an error.
+
+### rb_alchemy_unlocks — the two-path unlock ledger
+
+`PRIMARY KEY (player_uuid, unlock_key)` — idempotent by structure (the
+duplicate INSERT loses the PK; there is no UPDATE path — an unlock is a
+fact). Columns: `granted_utc BIGINT`, `claim_id CHAR(36) NULL` (the purchase
+claim that paid for it; null = admin grant, which has its own audited
+service path and deliberately ignores the definition's `enabled` flag as a
+staff recovery tool). Definitions live in config with the two §5.7 paths
+kept structurally distinct: POWER carries potion-type/amplifier/duration
+grants, EFFICIENCY carries cost-reduction/bag-capacity/auto-cooldown
+grants — kind-mismatched fields are refused at load, so efficiency can
+never quietly add combat strength.
+
+### rb_alchemy_rules — player-defined auto-consumption rules
+
+`PRIMARY KEY (rule_id)` — the §5.7 auto-consumption state: `trigger`
+(HEALTH_BELOW / BURNING / NETHER_ENTRY / FALLING), `potion_type`
+(policy-whitelisted), `threshold INT NULL` (HEALTH_BELOW only),
+`cooldown_seconds` (>= the operator floor at define time), `priority`
+(lower = earlier; ties by created_utc then rule_id — deterministic
+conflict handling), `storage` (BAG / INVENTORY / ANY — the storage
+requirement), `enabled` (the toggle; ownership-guarded CAS), `created_utc`,
+`updated_utc`, `removed_utc BIGINT NULL` (removed rules stop resolving but
+are kept for forensics; their rule id is consumed forever), and
+`last_fired_utc BIGINT NULL` — **the cooldown authority, stamped only by a
+committed execution**. The resolution set (`rulesFor`) is live + enabled
+rows in the conflict order; the controller evaluates at most one rule per
+trigger per cycle from it.
+
+### rb_alchemy_claims — the transactional anchor
+
+`PRIMARY KEY (claim_id)` — the ADR-0016 two-phase discipline generalized
+with a `purpose` discriminator (UNLOCK_PURCHASE | AUTO_CONSUME) and
+`subject_key` (the unlock key, or the rule id as a string). Columns:
+`state` ∈ {RESERVED, COMMITTED, RELEASED} (all transitions CAS; no path
+back to RESERVED), `digest VARCHAR(255)` (the controller's snapshot of
+the exact cost set / potion it verified — refund evidence for the
+crash-between-removal-and-commit window), `created_utc`, `resolved_utc`.
+Reserve-time guards answered from rows: unlock purchases check the
+*derived* level gate + every prerequisite + non-ownership + the
+single-reservation race guard; auto-consumes check ownership, liveness,
+enabled, the `last_fired_utc` cooldown, and one execution reservation per
+rule. `releaseStaleClaims(olderThan)` is the crash-recovery sweep.
+
+### rb_alchemy_events — append-only audit
+
+`PRIMARY KEY (event_key VARCHAR(160))` — deterministic server-composed
+keys: `xp:<player>:<source>` (the XP idempotency gate itself — the award
+inserts this row *before* any mutation, so a replayed source is a clean
+no-op, and finalizes its outcome column to LEVEL_UP/XP inside the same
+transaction), `claim:<uuid>:commit`, `claim:<uuid>:release`,
+`rule:<uuid>:define|toggle|remove`, `unlock:<player>:<key>`. Columns:
+`player_uuid CHAR(36) NULL`, `type`, `detail`, `outcome` (the durable
+commit outcome — what re-delivery reads back), `at_utc`. Idempotent by
+construction; written inside the mutation's transaction.

@@ -614,3 +614,53 @@ enabled `tracking` ritual, one enabled `mask` counter-ritual, one
 nothing auto-spawns from a stock install, the wards calibrated-scale
 precedent). `RpgConfigTest` pins the documented YAML and `defaults()` to
 each other.
+
+## Alchemy module (rebellion-alchemy, Phase 8 groundwork — persistence layer only, ADR-0019)
+
+Brewing progression, potion bags and auto-consumption (master prompt §5.7).
+The persistence-first groundwork move a fourth time (ADR-0009/0013/0016
+precedent): the module joins the build **serverless** — no plugin
+descriptor, no listeners, no inventory code — and everything that is
+*state* is pinned in schema, service and tests. The controller phase (bag
+items + inventory safety events, brewing-stand wiring, live trigger
+evaluation, commands, placeholders, menus) will ride this contract.
+
+**Authority**: `AlchemyService` — future-based transactional orchestration
+over five tables (module key `alchemy`): `rb_alchemy_progress` (the atomic
+XP accumulate; level *derived* by the pure `Leveling` walk — never a
+stored column), `rb_alchemy_unlocks` (the PK-idempotent two-path unlock
+ledger), `rb_alchemy_rules` (player-defined auto-consumption rules with the
+`last_fired_utc` cooldown authority), `rb_alchemy_claims` (the two-phase
+anchor generalized with a purpose discriminator: UNLOCK_PURCHASE and
+AUTO_CONSUME share one CAS discipline), `rb_alchemy_events` (append-only
+audit whose `xp:` keys double as the XP idempotency gate). No in-memory
+mirror: every read is a transaction against the durable authority.
+
+**The claim protocol** — how "atomic potion/cost consumption and safe
+fallback if a player inventory changes between rule evaluation and
+execution" is honored:
+
+1. `reserveUnlock` / `reserveAutoConsume` (one transaction): every guard
+   answered from rows (derived level gate, prerequisites, non-ownership /
+   rule ownership + liveness + enabled + cooldown, the single-reservation
+   race guard) → INSERT the RESERVED claim with the controller's digest.
+2. The controller removes physical items (cost items / the potion) *only*
+   under a live reservation; refusal → `releaseReservation` (typed refund
+   path, idempotent).
+3. `commitUnlock` / `commitAutoConsume` (one transaction): CAS
+   RESERVED→COMMITTED together with the effect row (the unlock grant, or
+   the rule's `last_fired_utc` stamp) and the audit event — all-or-none.
+   Re-delivery resolves to `COMMIT_NOOP` carrying the original outcome.
+
+**Config**: `AlchemyConfig` — four families (`brewing` curve scalars,
+`unlocks` with the POWER/EFFICIENCY shape separation and cycle-free
+prerequisite validation, `bags` capacity tiers with optional unlock gates,
+`auto-rules` the operator policy: trigger whitelist, HEALTH_BELOW bounds,
+cooldown floor, priority range, per-player cap, potion-type whitelist).
+Potion names validate through `PotionType` enum constants — the
+serverless-safe vocabulary proven by the ADR-0019 research (javap + jshell
+against the pinned paper-api 26.3 jar: `PotionType` is a real enum;
+`PotionEffectType`'s statics are registry-bound instances, so the live
+effect mapping stays controller-phase). Shipped defaults are conservative:
+one modest POWER unlock, one modest EFFICIENCY unlock, two bag tiers, and
+FALLING deliberately opt-in.
