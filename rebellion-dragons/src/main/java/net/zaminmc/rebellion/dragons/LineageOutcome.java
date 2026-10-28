@@ -28,6 +28,14 @@ public enum LineageOutcome {
     ROUTED,
     /** Admin retirement succeeded (audited, terminal). */
     RETIRED,
+    /** Pearl heal recorded: health advanced, cooldown stamp refreshed. */
+    PEARL_HEALED,
+    /** Pearl heal refused: the cooldown is still active (idempotent retry). */
+    PEARL_COOLDOWN,
+    /** Controller snapshot written (health + position + persist stamp). */
+    SNAPSHOT_SAVED,
+    /** Idempotent snapshot no-op: the binding was superseded/dead before the write. */
+    SNAPSHOT_STALE,
     NOT_FOUND,
     /** Transition refused by the current state (e.g. claim on a held egg). */
     INVALID_STATE,

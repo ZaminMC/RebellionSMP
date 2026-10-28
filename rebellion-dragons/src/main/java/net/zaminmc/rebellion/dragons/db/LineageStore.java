@@ -31,12 +31,13 @@ public final class LineageStore {
     public record LineageRow(UUID lineageId, int slot, LineageState state, UUID owner,
             UUID eggInstance, UUID entityUuid, String originWorld, int gatewayX,
             int gatewayY, int gatewayZ, Double health, long lastPearlHealUtc,
-            long createdAtUtc, long updatedAtUtc) {
+            String locWorld, Double locX, Double locY, Double locZ,
+            long lastPersistUtc, long createdAtUtc, long updatedAtUtc) {
 
         public Lineage toDomain() {
             return new Lineage(lineageId, slot, state, owner, eggInstance, entityUuid,
                     originWorld, gatewayX, gatewayY, gatewayZ, health, lastPearlHealUtc,
-                    createdAtUtc, updatedAtUtc);
+                    locWorld, locX, locY, locZ, lastPersistUtc, createdAtUtc, updatedAtUtc);
         }
     }
 
@@ -53,8 +54,13 @@ public final class LineageStore {
             rs.getInt(10),
             rs.getObject(11) == null ? null : rs.getDouble(11),
             rs.getLong(12),
-            rs.getLong(13),
-            rs.getLong(14));
+            rs.getString(13),
+            rs.getObject(14) == null ? null : rs.getDouble(14),
+            rs.getObject(15) == null ? null : rs.getDouble(15),
+            rs.getObject(16) == null ? null : rs.getDouble(16),
+            rs.getLong(17),
+            rs.getLong(18),
+            rs.getLong(19));
 
     /** Audit row (admin forensics; written inside mutation transactions). */
     public record AuditRow(UUID id, UUID lineageId, String action, UUID actor,
@@ -79,14 +85,16 @@ public final class LineageStore {
 
     static final String LINEAGE_COLUMNS = "lineage_id, slot, state, owner, egg_instance, "
             + "entity_uuid, origin_world, gateway_x, gateway_y, gateway_z, health, "
-            + "last_pearl_heal_utc, created_at_utc, updated_at_utc";
+            + "last_pearl_heal_utc, loc_world, loc_x, loc_y, loc_z, last_persist_utc, "
+            + "created_at_utc, updated_at_utc";
 
     /** Issuance-only insert; the UNIQUE backstops settle mint races. */
     public static final String INSERT = "INSERT INTO rb_dragons_lineages "
             + "(lineage_id, slot, state, owner, egg_instance, entity_uuid, origin_world, "
-            + "gateway_x, gateway_y, gateway_z, health, last_pearl_heal_utc, "
-            + "created_at_utc, updated_at_utc) "
-            + "VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, 0, ?, ?)";
+            + "gateway_x, gateway_y, gateway_z, health, last_pearl_heal_utc, loc_world, "
+            + "loc_x, loc_y, loc_z, last_persist_utc, created_at_utc, updated_at_utc) "
+            + "VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, 0, NULL, NULL, NULL, NULL, "
+            + "0, ?, ?)";
 
     public static final String SELECT_BY_ID = "SELECT " + LINEAGE_COLUMNS
             + " FROM rb_dragons_lineages WHERE lineage_id = ?";
@@ -128,6 +136,21 @@ public final class LineageStore {
     public static final String CAS_ROUTE =
             "UPDATE rb_dragons_lineages SET state = 'EGG_HELD', owner = ?, egg_instance = ?, "
             + "updated_at_utc = ? WHERE lineage_id = ? AND state IN ('EGG_HELD', 'EGG_RECOVERY')";
+
+    /** Pearl-heal CAS: only a HATCHED row bound to this entity, whose heal
+     *  cooldown has elapsed, may record the heal (idempotency backstop for
+     *  event retries — a second attempt inside the cooldown affects 0 rows). */
+    public static final String CAS_PEARL_HEAL =
+            "UPDATE rb_dragons_lineages SET health = ?, last_pearl_heal_utc = ?, "
+            + "updated_at_utc = ? WHERE lineage_id = ? AND entity_uuid = ? "
+            + "AND state = 'HATCHED' AND last_pearl_heal_utc <= ?";
+
+    /** Snapshot CAS: the periodic controller persist pins the bound entity,
+     *  so a snapshot of a superseded/dead binding can never overwrite. */
+    public static final String CAS_SNAPSHOT =
+            "UPDATE rb_dragons_lineages SET health = ?, loc_world = ?, loc_x = ?, "
+            + "loc_y = ?, loc_z = ?, last_persist_utc = ?, updated_at_utc = ? "
+            + "WHERE lineage_id = ? AND entity_uuid = ? AND state = 'HATCHED'";
 
     /** Retire CAS: once, from any non-retired state; clears all bindings. */
     public static final String CAS_RETIRE =
@@ -203,6 +226,22 @@ public final class LineageStore {
     public static int retire(TransactionContext tx, UUID lineageId, long nowUtc)
             throws SQLException {
         return tx.update(CAS_RETIRE, nowUtc, lineageId);
+    }
+
+    /** Pearl-heal compare-and-set; 0 rows = cooldown active, stale binding or wrong state. */
+    public static int pearlHeal(TransactionContext tx, UUID lineageId, UUID entityUuid,
+            double health, long healedAtUtc, long cooldownFloorUtc, long nowUtc)
+            throws SQLException {
+        return tx.update(CAS_PEARL_HEAL, health, healedAtUtc, nowUtc, lineageId,
+                entityUuid, cooldownFloorUtc);
+    }
+
+    /** Controller snapshot compare-and-set on the bound entity. */
+    public static int snapshot(TransactionContext tx, UUID lineageId, UUID entityUuid,
+            Double health, String world, Double x, Double y, Double z,
+            long persistUtc, long nowUtc) throws SQLException {
+        return tx.update(CAS_SNAPSHOT, health, world, x, y, z, persistUtc, nowUtc,
+                lineageId, entityUuid);
     }
 
     public static void audit(TransactionContext tx, UUID lineageId, String action,

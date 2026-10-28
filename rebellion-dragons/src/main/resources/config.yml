@@ -1,12 +1,15 @@
 # RebellionDragons configuration.
 #
 # Loaded and validated by net.zaminmc.rebellion.dragons.DragonsConfig
-# (tested in DragonsConfigTest). The module's plugin wiring, commands and
-# listeners are gated on the ADR-0008 live-server proofs; this file ships
-# now so the persistence contract is visible to operators.
+# (tested in DragonsConfigTest). Invalid values are loud load errors: the
+# module refuses to enable and Core reports the exact keys — nothing is
+# silently stretched or defaulted behind the operator's back.
 #
-# See docs/decisions/ADR-0009-dragon-lineage-registry.md for the lineage
-# registry model.
+# Controller defaults are MEASURED values from the ADR-0008 live experiments
+# on Paper 26.3 build 226 (docs/decisions/ADR-0008-dragon-spike-26.3.md):
+# mount platform, podium steering, fireball launch recipe, pearl-heal
+# arithmetic and the ~200-tick death window were all verified server-side.
+# The two remaining interactive gates are called out inline below.
 
 dragons:
   # Maximum obtainable pet-dragon lineages across the ENTIRE server
@@ -15,3 +18,91 @@ dragons:
   # honored and is rejected at load time - never silently stretched.
   # Boss victories at the cap follow vanilla rewards but mint nothing.
   max-lineages: 20
+
+  egg:
+    # Material of the physical lineage-egg item. The item is stamped with
+    # (lineage, egg-instance) PDC identity; it can never be destroyed by
+    # lava, fire, void, explosions, dispensers, hoppers or item despawn —
+    # all of those are cancelled by the egg-protection listeners.
+    material: DRAGON_EGG
+
+  pet:
+    # Health snapshot recorded at hatch; also the spawn health of the pet.
+    # 200.0 is the vanilla EnderDragon maximum (measured, ADR-0008 E3/E5).
+    hatch-health: 200.0
+
+    # Where /dragon hatch spawns the pet relative to the holder's facing
+    # and feet (blocks). Must stay inside loaded terrain near the holder.
+    hatch-offset-forward: 12
+    hatch-offset-up: 12
+
+    call:
+      # Same-world maximum distance for /dragon call. Cross-world calls
+      # are always allowed (recall); same-world distance above this is
+      # refused so a call is a recall, not a long-range teleport weapon.
+      max-range-blocks: 512
+      # Per-owner call cooldown.
+      cooldown-seconds: 30
+      # Hover height above the owner where a called dragon parks
+      # (aware(false) + HOVER = the zero-drift platform measured in E1).
+      hover-offset-blocks: 8
+
+    ride:
+      # INTERACTIVE GATE (ADR-0008): the client-side ride FEEL on a large
+      # entity is not yet verified with a real player. The control loop is
+      # fully implemented (closed-loop podium steering, E2c) but ships
+      # DISABLED until the ride-feel gate passes. Flip to true only after
+      # verifying on a live 26.3 server.
+      enabled: false
+      # Closed-loop steering cadence (ticks). Each cycle re-targets the
+      # podium at the rider's look direction (measured ~16 blocks/s).
+      steer-interval-ticks: 8
+      # How far ahead of the rider's eyes the podium target is placed.
+      look-ahead-blocks: 48
+
+    attack:
+      # /dragon attack resolves the target from the owner's crosshair
+      # raytrace within this range (blocks).
+      range-blocks: 64
+      # Fireball budget: at most this many plugin-launched DragonFireballs
+      # per dragon per rolling window (master prompt §5.6 default 30/60s;
+      # hard-validated upper bound 120 keeps scheduler/network bounded).
+      max-per-window: 30
+      window-seconds: 60
+      # Minimum spacing between two launches (anti-burst guard, ms).
+      min-interval-ms: 2000
+
+    pearl-heal:
+      # Health restored per Ender Pearl fed to the pet. E5 measured
+      # heal(25) as exactly +25 with no phase interference; heals clamp
+      # at the entity's maximum. The pearl is consumed only after the
+      # service CAS commits, so retried events can never double-consume.
+      amount: 25.0
+      cooldown-seconds: 10
+
+    water-weakness:
+      # Slight, configurable penalty while the pet is in water or rain:
+      # incoming damage is multiplied by this factor. Bounded at load to
+      # 1.0..4.0 — a penalty, never an instant unfair death (§5.6).
+      damage-multiplier: 1.25
+
+  boss-victory:
+    # Observe legitimate boss victories and mint lineage eggs keyed on the
+    # vanilla gateway each victory opened (ADR-0009/ADR-0014). The module
+    # never synthesizes gateways; it scans for the real END_GATEWAY block
+    # that emerged during the observation window.
+    observe-enabled: true
+    scan:
+      # Annulus (radius-min..radius-max blocks from the exit portal) and
+      # height band scanned for new gateways after a victory. Defaults are
+      # deliberately generous: the exact vanilla ring geometry on 26.3 is
+      # confirmed interactively (ADR-0008 E4b). A scan miss fails CLOSED —
+      # a loud WARN and no mint, never a wrong attribution.
+      radius-min-blocks: 48
+      radius-max-blocks: 160
+      y-min: 0
+      y-max: 256
+      # Poll cadence during the window (ticks).
+      poll-interval-ticks: 40
+      # Total observation window after a victory (seconds).
+      window-seconds: 90

@@ -142,7 +142,7 @@ index + anchor map) is updated only after commit and rebuilt by a full
 read at enable (`WardService.loadAll`); detection state is ephemeral by
 design (see ADR-0007).
 
-## Dragon lineage registry (module key `dragons`, migration v1 — ADR-0009)
+## Dragon lineage registry (module key `dragons`, migrations v1+v2 — ADR-0009, controller columns in v2)
 
 `rb_dragons_lineages` — one row per lineage ever minted (hard cap 20):
 
@@ -170,14 +170,23 @@ design (see ADR-0007).
   gateway-validity guard and the issuance idempotency key: one gateway
   position mints exactly one lineage, ever — duplicate victory events,
   listener re-registrations and event retries all settle here.
-- `health DOUBLE NULL` — hatch-time health snapshot while `HATCHED`.
-- `last_pearl_heal_utc BIGINT` — reserved persistence anchor for pearl-heal
-  cooldowns (controller phase; default 0).
+- `health DOUBLE NULL` — hatch-time health snapshot while `HATCHED`;
+  refreshed by pearl heals and the periodic controller snapshot.
+- `last_pearl_heal_utc BIGINT` — cooldown stamp of the last committed pearl
+  heal; the heal CAS requires it to be at least the configured cooldown
+  old, which is what makes retried interact events typed refusals instead
+  of double heals (0 = never).
+- `loc_world VARCHAR(64) NULL`, `loc_x/loc_y/loc_z DOUBLE NULL` —
+  **(v2)** last persisted pet position; all-or-none, NULL until the first
+  snapshot after hatch. Lets `/dragon call` resolve a pet whose chunk is
+  unloaded and lets the sweep reconcile bindings whose entity vanished.
+- `last_persist_utc BIGINT NOT NULL DEFAULT 0` — **(v2)** stamp of the last
+  controller snapshot write.
 - `created_at_utc`, `updated_at_utc BIGINT`.
 
 `rb_dragons_audit` — append-only audit trail (`id CHAR(36) PK`,
 `lineage_id`, `action` ∈ {ISSUE, HATCH, DEATH_RETURN, PARK_RECOVERY,
-CLAIM, ADMIN_ROUTE, RETIRE}, `actor` NULL for system actions,
+CLAIM, ADMIN_ROUTE, RETIRE, PEARL_HEAL}, `actor` NULL for system actions,
 `detail VARCHAR(255)`, `at_utc`). One row per real mutation, written in
 the same transaction; idempotent no-ops write nothing. Indexed by
 `lineage_id` and `at_utc` for admin forensics.

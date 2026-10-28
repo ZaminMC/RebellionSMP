@@ -1,6 +1,6 @@
 # ADR-0008 — Dragon controller spike: verified Paper 26.3 surface and the live-verification gate
 
-Date: 2026-10-28 · Status: accepted (spike report; production controls gated; live server-side proofs recorded below)
+Date: 2026-10-28 · Status: accepted (spike + live proofs; production controller implemented on the proven surface in session 10 — see ADR-0014 for the gateway observation; the two interactive gates below remain open)
 
 ## Context
 

@@ -118,3 +118,30 @@ Invariants (each is an executed test in `LineageServiceIT`, real SQLite):
 - Restart recovery: `loadAll()` rebuilds the by-id/by-egg/by-entity/
   by-gateway mirror from the committed rows; identity stamps round-trip
   (proven by the restart round-trip test).
+
+### Controller-side additions (session 10, schema v2)
+
+Two new CAS transitions extend the same table without changing the state
+machine above — both are HATCHED-only updates pinned on the bound
+`entity_uuid`:
+
+| Statement | Guard (CAS predicate) | Idempotency |
+|---|---|---|
+| pearl heal (`CAS_PEARL_HEAL`) | `entity_uuid = presented AND state = 'HATCHED' AND last_pearl_heal_utc <= now - cooldown` | event retry inside the cooldown → 0 rows → typed `PEARL_COOLDOWN` refused before the pearl is consumed |
+| persistence snapshot (`CAS_SNAPSHOT`) | `entity_uuid = presented AND state = 'HATCHED'` | superseded/dead binding → 0 rows → benign `SNAPSHOT_STALE` no-op |
+
+Entity-side reconciliation (no schema states; the row stays HATCHED while
+the entity exists on disk, per the live-proven chunk persistence, ADR-0008
+E7):
+
+- **Loaded entity** → the 30 s sweep writes health + position snapshots.
+- **Chunk unloaded** → normal (entity persists; the persisted location
+  resolves it for `/dragon call` via async chunk load).
+- **Chunk loaded but entity gone** (plugin removal, offline wipe, void) →
+  `EntityRemoveEvent(cause != UNLOAD)` immediately, and the sweep as the
+  backstop, run the no-killer death CAS → the lineage parks in
+  `EGG_RECOVERY` with the last owner as claimant. A living dragon is never
+  orphaned by a restart or an unload/reload cycle.
+- **Boss victory** (entity with a live `DragonBattle`, never a bound pet)
+  → the ADR-0014 observation window: mint per emerged gateway, fail-closed
+  on ambiguity/miss/no-credited-killer.

@@ -1,0 +1,31 @@
+name: RebellionDragons
+version: '${version}'
+main: net.zaminmc.rebellion.dragons.DragonsPlugin
+api-version: '26.3'
+# POSTWORLD: the lineage mirror loads from the database after Core's
+# bootstrap (awaited via applyModuleMigrations). RebellionTeams is a soft
+# dependency only: its TeamAffiliationService relaxes fireball friendly-fire
+# cancellation to the whole team; without it only the owner is protected.
+load: POSTWORLD
+depend: [RebellionAPI, RebellionCore]
+softdepend: [RebellionTeams]
+description: Finite dragon lineage registry - 20 server-wide gateway-backed lineages, protected lineage eggs, pet mount/steer/fire/heal controls on the ADR-0008-proven surface, audited admin recovery.
+authors: [Abasing]
+website: https://github.com/ZaminMC/RebellionSMP
+
+commands:
+  dragon:
+    description: Pet dragon lifecycle (hatch a held lineage egg, status, call, mount, dismiss, feed, attack, claim a recovery egg).
+    usage: /dragon <hatch|status|call|mount|dismiss|attack|claim>
+  dragonadmin:
+    description: RebellionDragons administration (list, info, route, audit, retire).
+    usage: /dragonadmin <list|info <slot>|route <slot> <player>|audit <slot>|retire <slot> confirm [reason]>
+    permission: rebellion.dragons.admin
+
+permissions:
+  rebellion.dragons.use:
+    description: Allows hatching, calling, mounting, feeding and attacking with one's own lineage dragon (ownership is enforced service-side).
+    default: true
+  rebellion.dragons.admin:
+    description: Allows administering dragon lineages (list, route recovery eggs, audit trail, retire with explicit confirmation).
+    default: op

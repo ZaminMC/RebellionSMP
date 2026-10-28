@@ -19,6 +19,15 @@ import org.jetbrains.annotations.NotNull;
  * processing compare-and-sets on {@code entityUuid} so duplicate events
  * resolve to no-ops (master prompt §5.6).</p>
  *
+ * <p>Since schema v2 the row also carries the controller's persistence
+ * snapshot for HATCHED lineages: the last observed {@code loc} world
+ * position (all-or-none; {@code null} until the first snapshot after hatch)
+ * and the {@code lastPersistUtc} stamp. The entity itself survives chunk
+ * unload/reload with its UUID (proven live, ADR-0008 E7) — the persisted
+ * position exists so call/recall and the orphan sweep can resolve a pet
+ * whose chunk is currently unloaded, and so a restart can reconcile a
+ * binding whose entity was removed while the server was down.</p>
+ *
  * @param lineageId     immutable server-issued lineage UUID (PRIMARY KEY)
  * @param slot          allocation ordinal, 1..; never reused, never shifts
  * @param state         lifecycle state (never null)
@@ -33,6 +42,12 @@ import org.jetbrains.annotations.NotNull;
  * @param gatewayZ      observed vanilla gateway anchor block z
  * @param health        dragon health snapshot while HATCHED (null otherwise)
  * @param lastPearlHealUtc last pearl-heal epoch millis (0 = never)
+ * @param locWorld      last persisted pet world name; null unless HATCHED
+ *                      and snapshotted at least once
+ * @param locX          last persisted pet x (null with locWorld)
+ * @param locY          last persisted pet y (null with locWorld)
+ * @param locZ          last persisted pet z (null with locWorld)
+ * @param lastPersistUtc last controller snapshot write (0 = never)
  * @param createdAtUtc  mint epoch millis
  * @param updatedAtUtc  last transition epoch millis
  */
@@ -49,6 +64,11 @@ public record Lineage(
         int gatewayZ,
         Double health,
         long lastPearlHealUtc,
+        String locWorld,
+        Double locX,
+        Double locY,
+        Double locZ,
+        long lastPersistUtc,
         long createdAtUtc,
         long updatedAtUtc) {
 
@@ -71,6 +91,13 @@ public record Lineage(
             throw new IllegalArgumentException(
                     "entityUuid present in non-HATCHED state " + state);
         }
+        if ((locWorld == null) != (locX == null) || (locWorld == null) != (locZ == null)) {
+            throw new IllegalArgumentException(
+                    "persisted location is all-or-none (locWorld=" + locWorld + ")");
+        }
+        if (locWorld != null && locWorld.isBlank()) {
+            throw new IllegalArgumentException("locWorld must not be blank");
+        }
     }
 
     /** @return the owner as an Optional (empty for RETIRED). */
@@ -83,9 +110,19 @@ public record Lineage(
         return Optional.ofNullable(entityUuid);
     }
 
+    /** @return the last persisted pet position, when snapshotted. */
+    public @NotNull Optional<PersistedLocation> locationOpt() {
+        return locWorld == null ? Optional.empty()
+                : Optional.of(new PersistedLocation(locWorld, locX, locY, locZ));
+    }
+
     /** @return this lineage's gateway anchor key. */
     public @NotNull GatewayKey gateway() {
         return new GatewayKey(originWorld, gatewayX, gatewayY, gatewayZ);
+    }
+
+    /** Persisted pet position (schema v2; all-or-none with locWorld). */
+    public record PersistedLocation(@NotNull String world, double x, double y, double z) {
     }
 
     /** Copy with a new state and the fields the transition owns. */
@@ -98,7 +135,8 @@ public record Lineage(
             long updatedAtUtc) {
         return new Lineage(lineageId, slot, newState, newOwner, newEggInstance,
                 newEntity, originWorld, gatewayX, gatewayY, gatewayZ, newHealth,
-                lastPearlHealUtc, createdAtUtc, updatedAtUtc);
+                lastPearlHealUtc, null, null, null, null, lastPersistUtc,
+                createdAtUtc, updatedAtUtc);
     }
 
     /** Copy with an updated dragon health snapshot (HATCHED only). */
@@ -108,6 +146,30 @@ public record Lineage(
         }
         return new Lineage(lineageId, slot, state, owner, eggInstance, entityUuid,
                 originWorld, gatewayX, gatewayY, gatewayZ, newHealth,
-                lastPearlHealUtc, createdAtUtc, updatedAtUtc);
+                lastPearlHealUtc, locWorld, locX, locY, locZ, lastPersistUtc,
+                createdAtUtc, updatedAtUtc);
+    }
+
+    /** Copy with an updated controller snapshot (HATCHED only; position optional). */
+    public @NotNull Lineage withSnapshot(Double newHealth,
+            @NotNull PersistedLocation location, long persistUtc, long updatedAtUtc) {
+        if (state != LineageState.HATCHED) {
+            throw new IllegalArgumentException("snapshots only exist while HATCHED");
+        }
+        return new Lineage(lineageId, slot, state, owner, eggInstance, entityUuid,
+                originWorld, gatewayX, gatewayY, gatewayZ, newHealth,
+                lastPearlHealUtc, location.world(), location.x(), location.y(),
+                location.z(), persistUtc, createdAtUtc, updatedAtUtc);
+    }
+
+    /** Copy with an updated pearl-heal stamp (HATCHED only). */
+    public @NotNull Lineage withPearlHeal(double newHealth, long healedAtUtc,
+            long updatedAtUtc) {
+        if (state != LineageState.HATCHED) {
+            throw new IllegalArgumentException("pearl heals only exist while HATCHED");
+        }
+        return new Lineage(lineageId, slot, state, owner, eggInstance, entityUuid,
+                originWorld, gatewayX, gatewayY, gatewayZ, newHealth, healedAtUtc,
+                locWorld, locX, locY, locZ, lastPersistUtc, createdAtUtc, updatedAtUtc);
     }
 }

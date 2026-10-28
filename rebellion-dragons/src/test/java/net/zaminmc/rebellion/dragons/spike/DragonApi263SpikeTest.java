@@ -176,6 +176,85 @@ class DragonApi263SpikeTest {
     }
 
     // ------------------------------------------------------------------
+    // Controller-slice surface (session 10): every member the production
+    // controller, listeners and GatewayObserver depend on, probed the same
+    // way. A missing member here is a compile error anyway, but the probe
+    // keeps the findings table honest for the ADR.
+    // ------------------------------------------------------------------
+
+    @Test
+    void controllerSliceSurface() throws Exception {
+        Class<?> entity = Class.forName("org.bukkit.entity.Entity");
+        Class<?> living = Class.forName("org.bukkit.entity.LivingEntity");
+        Class<?> dragon = Class.forName("org.bukkit.entity.EnderDragon");
+        Class<?> fireball = findClass("org.bukkit.entity.Fireball");
+        Class<?> world = findClass("org.bukkit.World");
+
+        record("Entity.isInWaterOrRain()", find(entity, "isInWaterOrRain") != null);
+        record("Entity.teleportAsync(Location)", find(entity, "teleportAsync",
+                findClass("org.bukkit.Location")) != null);
+        record("LivingEntity.getTargetEntity(int)", find(living, "getTargetEntity",
+                int.class) != null);
+        record("LivingEntity.getKiller()", find(living, "getKiller") != null);
+
+        record("EnderDragon.getPodium()", find(dragon, "getPodium") != null);
+        record("EnderDragon.setPodium(Location)", find(dragon, "setPodium",
+                findClass("org.bukkit.Location")) != null);
+
+        record("Fireball.setDirection(Vector)", fireball != null && find(fireball,
+                "setDirection", findClass("org.bukkit.util.Vector")) != null);
+        record("Fireball.setAcceleration(Vector)", fireball != null && find(fireball,
+                "setAcceleration", findClass("org.bukkit.util.Vector")) != null);
+        record("Fireball.setPower(Vector)", fireball != null && find(fireball,
+                "setPower", findClass("org.bukkit.util.Vector")) != null);
+
+        Class<?> battle = findClass("org.bukkit.boss.DragonBattle");
+        record("DragonBattle.getGatewayCount()", battle != null
+                && find(battle, "getGatewayCount") != null);
+        record("DragonBattle.getEndPortalLocation()", battle != null
+                && find(battle, "getEndPortalLocation") != null);
+
+        Class<?> chunk = findClass("org.bukkit.Chunk");
+        Class<?> snapshot = findClass("org.bukkit.ChunkSnapshot");
+        record("Chunk.getChunkSnapshot()", chunk != null
+                && find(chunk, "getChunkSnapshot") != null);
+        record("ChunkSnapshot.getBlockType(int,int,int)", snapshot != null
+                && find(snapshot, "getBlockType", int.class, int.class, int.class) != null);
+        record("World.getChunkAtAsync(int,int,Consumer)", world != null
+                && find(world, "getChunkAtAsync", int.class, int.class,
+                        java.util.function.Consumer.class) != null);
+
+        // Egg-protection + interact events.
+        record("EntityRemoveEvent$Cause.UNLOAD (taxonomy)", findClass(
+                "org.bukkit.event.entity.EntityRemoveEvent$Cause") != null);
+        record("EntityCombustEvent (cancellable)", findClass(
+                "org.bukkit.event.entity.EntityCombustEvent") != null);
+        record("ItemDespawnEvent (cancellable)", findClass(
+                "org.bukkit.event.entity.ItemDespawnEvent") != null);
+        record("InventoryMoveItemEvent (hopper path)", findClass(
+                "org.bukkit.event.inventory.InventoryMoveItemEvent") != null);
+        record("BlockDispenseEvent (dispenser path)", findClass(
+                "org.bukkit.event.block.BlockDispenseEvent") != null);
+        record("EntityPortalEvent (egg item portal path)", findClass(
+                "org.bukkit.event.entity.EntityPortalEvent") != null);
+        record("PlayerInteractEntityEvent.getHand()", find(
+                findClass("org.bukkit.event.player.PlayerInteractEntityEvent"),
+                "getHand") != null);
+        record("PlayerDeathEvent", findClass(
+                "org.bukkit.event.entity.PlayerDeathEvent") != null);
+        record("EnderDragonFireballHitEvent (com.destroystokyo)", findClass(
+                "com.destroystokyo.paper.event.entity.EnderDragonFireballHitEvent") != null);
+        record("EntityDamageEvent.setDamage(double)", find(
+                findClass("org.bukkit.event.entity.EntityDamageEvent"),
+                "setDamage", double.class) != null);
+        record("Item.setUnlimitedLifetime(boolean)", find(
+                findClass("org.bukkit.entity.Item"), "setUnlimitedLifetime",
+                boolean.class) != null);
+        record("Material.END_GATEWAY (scannable target)", findClass(
+                "org.bukkit.Material") != null);
+    }
+
+    // ------------------------------------------------------------------
     // Probe plumbing
     // ------------------------------------------------------------------
 

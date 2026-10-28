@@ -47,6 +47,10 @@ final class LineageServiceIT {
     private DatabaseService db;
     private LineageService service;
 
+    /** Mutable service clock: cooldown tests advance it deterministically. */
+    private final java.util.concurrent.atomic.AtomicLong clock =
+            new java.util.concurrent.atomic.AtomicLong(1_700_000_000_000L);
+
     private final UUID victor = UUID.randomUUID();
     private final UUID killer = UUID.randomUUID();
     private final UUID stranger = UUID.randomUUID();
@@ -54,13 +58,13 @@ final class LineageServiceIT {
 
     /** Small cap for fast cap tests; separate tests build their own config. */
     private DragonsConfig config(int cap) {
-        return new DragonsConfig(cap);
+        return DragonsConfig.defaults(cap);
     }
 
     @BeforeEach
     void boot() throws Exception {
         db = newService();
-        service = new LineageService(db, config(3), () -> 1_700_000_000_000L);
+        service = new LineageService(db, config(3), clock::get);
         await(service.loadAll());
     }
 
@@ -73,7 +77,8 @@ final class LineageServiceIT {
         DatabaseService fresh = new DatabaseService(sqliteConfig(), tmp,
                 java.util.logging.Logger.getLogger("test"), diagnostics());
         await(fresh.bootstrap());
-        await(fresh.applyModuleMigrations("dragons", List.of(DragonsSchema.v1())));
+        await(fresh.applyModuleMigrations("dragons",
+                List.of(DragonsSchema.v1(), DragonsSchema.v2())));
         return fresh;
     }
 
@@ -595,6 +600,124 @@ final class LineageServiceIT {
         assertTrue(audit.stream().anyMatch(a -> a.action().equals("ISSUE")));
         assertTrue(audit.stream().anyMatch(a -> a.action().equals("HATCH")));
         assertTrue(audit.stream().anyMatch(a -> a.action().equals("DEATH_RETURN")));
+    }
+
+    // ------------------------------------------------------------------
+    // Controller persistence (schema v2): pearl heal + snapshots
+    // ------------------------------------------------------------------
+
+    @Test
+    void pearlHealIsCooldownGuardedAndIdempotent() {
+        Lineage held = firstIssue(service, 0, victor);
+        UUID entity = UUID.randomUUID();
+        issueOkHatch(held, entity);
+
+        // First heal inside the cooldown window of a fresh hatch: the stamp
+        // is 0, so the CAS floor (now - 10s) admits it.
+        LineageResult heal = run(service.pearlHeal(held.lineageId(), entity,
+                180.0, 10_000L));
+        assertEquals(LineageOutcome.PEARL_HEALED, heal.outcome());
+        assertTrue(heal.success() && heal.mutated());
+        assertEquals(180.0, heal.lineage().health());
+        assertEquals(clock.get(), heal.lineage().lastPearlHealUtc(),
+                "the cooldown stamp must advance to the heal time");
+
+        // Event retry within the cooldown: refused BEFORE any pearl is
+        // consumed by the caller contract (§5.6 idempotency).
+        LineageResult retry = run(service.pearlHeal(held.lineageId(), entity,
+                200.0, 10_000L));
+        assertEquals(LineageOutcome.PEARL_COOLDOWN, retry.outcome());
+        assertFalse(retry.mutated());
+        assertEquals(180.0, service.byId(held.lineageId()).orElseThrow().health());
+
+        // After the cooldown elapses, the next heal wins again.
+        clock.addAndGet(10_001L);
+        LineageResult later = run(service.pearlHeal(held.lineageId(), entity,
+                200.0, 10_000L));
+        assertEquals(LineageOutcome.PEARL_HEALED, later.outcome());
+        assertEquals(200.0, later.lineage().health());
+
+        // Stale entity binding loses (superseded dragon death).
+        assertEquals(LineageOutcome.HATCH_CONFLICT,
+                run(service.pearlHeal(held.lineageId(), UUID.randomUUID(),
+                        150.0, 10_000L)).outcome());
+
+        // Non-hatched lineage refuses with INVALID_STATE.
+        Lineage egg = firstIssue(service, 1, victor);
+        assertEquals(LineageOutcome.INVALID_STATE,
+                run(service.pearlHeal(egg.lineageId(), UUID.randomUUID(),
+                        150.0, 10_000L)).outcome());
+
+        // The heal is audited once per committed mutation.
+        List<AuditRow> audit = run(service.auditTrail(held.lineageId()));
+        assertEquals(2, audit.stream().filter(a -> a.action().equals("PEARL_HEAL")).count());
+    }
+
+    @Test
+    void persistSnapshotIsEntityPinnedAndIdempotentForStaleBindings() {
+        Lineage held = firstIssue(service, 0, victor);
+        UUID entity = UUID.randomUUID();
+        issueOkHatch(held, entity);
+
+        Lineage.PersistedLocation loc =
+                new Lineage.PersistedLocation("world", 12.5, 96.0, -30.25);
+        LineageResult saved = run(service.persistSnapshot(held.lineageId(), entity,
+                175.5, loc));
+        assertEquals(LineageOutcome.SNAPSHOT_SAVED, saved.outcome());
+        Lineage mirrored = service.byId(held.lineageId()).orElseThrow();
+        assertEquals(Optional.of(loc), mirrored.locationOpt());
+        assertEquals(175.5, mirrored.health());
+        assertEquals(clock.get(), mirrored.lastPersistUtc());
+
+        // Snapshot for a superseded binding: benign typed no-op.
+        LineageResult stale = run(service.persistSnapshot(held.lineageId(),
+                UUID.randomUUID(), 100.0, loc));
+        assertEquals(LineageOutcome.SNAPSHOT_STALE, stale.outcome());
+        assertTrue(stale.success() && !stale.mutated());
+        assertEquals(175.5, service.byId(held.lineageId()).orElseThrow().health());
+
+        // After death the binding is gone; snapshots stay no-ops.
+        run(service.processDeath(held.lineageId(), entity, Optional.of(killer)));
+        LineageResult late = run(service.persistSnapshot(held.lineageId(), entity,
+                90.0, loc));
+        assertEquals(LineageOutcome.SNAPSHOT_STALE, late.outcome());
+    }
+
+    @Test
+    void snapshotsAndPearlStampsSurviveARestartRoundTrip() throws Exception {
+        Lineage held = firstIssue(service, 0, victor);
+        UUID entity = UUID.randomUUID();
+        issueOkHatch(held, entity);
+        clock.addAndGet(5_000L);
+        run(service.pearlHeal(held.lineageId(), entity, 190.0, 10_000L));
+        clock.addAndGet(5_000L);
+        Lineage.PersistedLocation loc =
+                new Lineage.PersistedLocation("world_the_end", -12.5, 88.0, 44.75);
+        run(service.persistSnapshot(held.lineageId(), entity, 188.0, loc));
+        Lineage living = service.byId(held.lineageId()).orElseThrow();
+
+        db.shutdown();
+        db = newService();
+        LineageService restarted = new LineageService(db, config(3), clock::get);
+        await(restarted.loadAll());
+
+        Lineage back = restarted.byId(held.lineageId()).orElseThrow();
+        assertEquals(Optional.of(living.locationOpt().orElseThrow()), back.locationOpt());
+        assertEquals(188.0, back.health());
+        assertEquals(living.lastPearlHealUtc(), back.lastPearlHealUtc());
+        assertEquals(living.lastPersistUtc(), back.lastPersistUtc());
+
+        // The cooldown guard still holds after the restart: a heal retried
+        // inside the window is still refused.
+        assertEquals(LineageOutcome.PEARL_COOLDOWN,
+                run(restarted.pearlHeal(held.lineageId(), entity, 200.0, 10_000L)).outcome());
+    }
+
+    /** Hatch helper that asserts the mutation committed. */
+    private void issueOkHatch(Lineage held, UUID entity) {
+        LineageResult result = run(service.hatch(held.lineageId(),
+                held.eggInstance(), victor, entity, 200.0));
+        assertEquals(LineageOutcome.HATCHED, result.outcome(), result.detail());
     }
 
     /** Issues through an arbitrary service instance (restart test helper). */

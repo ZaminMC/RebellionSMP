@@ -46,6 +46,16 @@ tasks.test {
     }
 }
 
+// Expand ${version} in plugin.yml (same as every shipped module; caught live
+// by the session-10 boot smoke: the dragons jar printed "${version}").
+tasks.processResources {
+    val version = project.version.toString()
+    inputs.property("version", version)
+    filesMatching("plugin.yml") {
+        expand("version" to version)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // ADR-0008 live-verification harness (never shipped).
 //

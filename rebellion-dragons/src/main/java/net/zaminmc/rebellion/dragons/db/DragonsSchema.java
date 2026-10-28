@@ -75,6 +75,25 @@ public final class DragonsSchema {
                         "CREATE INDEX rb_dragons_audit_at_idx ON rb_dragons_audit (at_utc)"));
     }
 
+    /**
+     * @return the v2 migration: controller persistence columns. One
+     * {@code ALTER TABLE ... ADD COLUMN} per statement — the portable form
+     * for both SQLite and MySQL. Additive only; v1 rows gain NULL/0
+     * defaults, so a v1 database upgrades in place with no data rewrite
+     * (ADR-0005 semantics: migrations are monotonic and non-destructive).
+     */
+    public static MigrationSpec v2() {
+        return new MigrationSpec(2,
+                "dragons v2: pet location snapshot + pearl-heal/snapshot stamps "
+                        + "(controller phase)",
+                List.of(
+                        "ALTER TABLE rb_dragons_lineages ADD COLUMN loc_world VARCHAR(64) NULL",
+                        "ALTER TABLE rb_dragons_lineages ADD COLUMN loc_x DOUBLE NULL",
+                        "ALTER TABLE rb_dragons_lineages ADD COLUMN loc_y DOUBLE NULL",
+                        "ALTER TABLE rb_dragons_lineages ADD COLUMN loc_z DOUBLE NULL",
+                        "ALTER TABLE rb_dragons_lineages ADD COLUMN last_persist_utc BIGINT NOT NULL DEFAULT 0"));
+    }
+
     private static String compact(String ddl) {
         return ddl.trim().replaceAll("\\s+", " ");
     }

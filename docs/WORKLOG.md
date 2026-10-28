@@ -763,3 +763,126 @@ pre-victory; the boot-smoke flat preset yields a void world on 26.3.
   token bucket, pearl feeding), `/dragon` command family, egg-item
   protection listeners, tests. Then the interactive pass for the ride
   feel and E4/E4b.
+
+## 2026-10-28 — Session 10: Phase 5 controller slice — RebellionDragons becomes the sixth installable plugin
+
+**Session context**
+
+Session-9's follow-up token rotation was again lost to a context-window
+overflow (the new PAT existed only in the lost conversation; verified it
+is nowhere on disk — shell history, /tmp, tool-results, staging swept).
+The session-7 PAT remains fully valid (GET /user = 200 Abasing; drives
+both the git remote and the `ABASING_TOKEN` secret, updated_at
+00:32:28Z — a consistent, working credential pair), so per the
+session-9 precedent development proceeded on it. The swap is re-runnable
+whenever the new PAT is re-supplied; nothing is blocked.
+
+**Protocol**
+
+Pulled develop (b605d5f, dev.5 bump; already up to date), re-read the
+remote master prompt (md5 a84a5323, unchanged, 615 lines), verified
+v0.1.0-dev.5 published (prerelease, 5 jars, author Abasing), baseline
+`./gradlew build` + forced test rerun: 307 tests green (api 8, core 44,
+items 91, teams 50, wards 86, dragons 28).
+
+**Implemented (34 new/changed files in rebellion-dragons)**
+
+- **Schema v2** (additive `ALTER TABLE` migration): `loc_world`,
+  `loc_x/y/z`, `last_persist_utc` — the controller's persistence
+  snapshot. New CAS statements: `CAS_PEARL_HEAL` (cooldown-guarded,
+  entity-pinned; retries are typed refusals before the pearl is
+  consumed) and `CAS_SNAPSHOT` (entity-pinned; stale bindings are
+  benign no-ops). `LineageService.pearlHeal` + `persistSnapshot` with
+  the same publish/mirror discipline; `Lineage` record extended with
+  the snapshot fields (all-or-none location invariant enforced in the
+  constructor).
+- **`DragonsConfig` full controller contract**: measured ADR-0008
+  defaults (hatch health 200, pearl +25, fireball 30/60 s, water
+  weakness 1.25 bounded 1.0..4.0, call range/cooldown, scan bounds),
+  `ride.enabled: false` (the ride-feel interactive gate), every number
+  range-checked with the bound named in the issue. `defaults()` factory
+  pinned to the shipped config.yml by test.
+- **`GatewayObserver` + `GatewayDiff` (ADR-0014, new)**: boss-victory
+  minting = baseline annulus scan (async chunks + snapshots, off-thread
+  block sweep) → cheap gateway-count poll → discovery scan → pure
+  diff decision (emerging-only, registered-excluded, count
+  cross-check, ambiguity/miss fail-closed) → `issueFromGateway` →
+  stamped-egg delivery. No credited killer = no mint. Pets excluded
+  even when the vanilla fight adopts them (findOrCreateDragon adopts
+  strays in a ticking End — recorded in ADR-0008).
+- **`PetController`** on the measured recipes: HOVER platform, closed-
+  loop podium steering + phase guard, four-vector fireball recipe with
+  per-dragon `FireballBudget` (pure, tested), pearl feeding behind the
+  CAS, call/recall through the persisted location (async chunk load →
+  resolve → teleport; vanished entities reconcile through the death
+  CAS), mount/dismiss, water weakness, egg build/stamp/deliver with
+  display name + lore through the catalog.
+- **Listeners**: `BossVictoryListener` (battle-gate + pet exclusion +
+  DragonEggFormEvent at the Paper FQN), `PetLifecycleListener`
+  (direct kill → killer gets the egg; owner PvP death → killer inherits
+  + death presentation `kill()` only after the CAS commits;
+  EntityRemoveEvent cause != UNLOAD reconciliation; mount
+  bookkeeping), `EggProtectionListener` (damage/combust/despawn/
+  hopper/dispense/portal cancelled for live egg stamps; stale clones
+  unprotected by design), `PetInteractListener` (pearl feed, water
+  weakness, friendly-hit cancellation via UUID-tracked fireballs,
+  phase guard).
+- **`/dragon` + `/dragonadmin` + placeholders + `DragonsPlugin`**:
+  hatch/status/call/mount/dismiss/attack/claim; admin list/info/route/
+  audit/retire with the literal `confirm` keyword; `dragon_owned`,
+  `dragon_id`, `dragon_health`, `dragon_count`, `dragon_cap`; full
+  module wiring (config → messages → Core services → migrations v1+v2
+  → mirror → controller → listeners → tasks → commands → placeholders
+  → module health), 30 s persistence sweep + final flush in onDisable,
+  steer task registered only while riding is enabled.
+- **`messages.yml`** (ADR-0012 contract): every rendered key pinned by
+  `DragonsMessagesTest`; dead keys deliberately absent.
+
+**Evidence**
+
+- `./gradlew build` green; **336 tests** stable across the suite (api 8,
+  core 44, items 91, teams 50, wards 86, **dragons 57** — was 28).
+  New: `FireballBudgetTest` (6), `GatewayDiffTest` (8),
+  `DragonsMessagesTest` (3), `DragonsConfigTest` rewritten (13, was 6:
+  shipped-file validity, defaults-factory lockstep, measured values,
+  all bound checks), `LineageServiceIT` +3 (pearl-heal idempotency,
+  entity-pinned snapshots, snapshot/pearl restart round-trip),
+  `DragonApi263SpikeTest.controllerSliceSurface` (probe of every
+  newly-used member).
+- Boot smoke on Paper 26.3 build 226, upgrade-style on the existing
+  smoke-server database: all six jars enable; dragons v0 → v2 migration
+  applies in one boot and is a no-op on restart; config + messages
+  extracted byte-identical (md5); console surface renders
+  (player-only denial, empty list, retire-usage, modules all
+  operational, diagnose clean); restart idempotent; graceful
+  reverse-order shutdown with the final sweep; zero ERROR/SEVERE lines.
+- **One live defect caught and fixed in-session**: the dragons jar
+  shipped with an unexpanded `${version}` in plugin.yml (every other
+  module had the processResources expansion; dragons had never shipped
+  a descriptor). Added the same block, rebuilt, re-verified on the
+  restarted server (`v0.1.0-dev.5` renders).
+
+**Honest scope**
+
+Console-surface + boot-level verification only: no player joined the
+smoke server, no boss died, no egg was minted live. Player flows
+(hatch/call/ride/feed/attack), the E4b vanilla first-victory emission
+with real gateway coordinates, and the client ride feel remain the
+documented interactive pass; riding ships disabled by config until the
+ride-feel gate passes. Recorded risk: hatch spawns the entity before
+the CAS binds it — a refused CAS removes the spawn, but a crash between
+spawn and commit can leave one unbound vanilla dragon (the sweep never
+touches unbound entities). Measured steering is ~16 blocks/s — the
+"faster than unpowered elytra" §5.6 target is not yet met by the podium
+primitive and stays on the interactive-pass list.
+
+**Next task**
+
+The interactive pass on the committed harness: one player joins the
+boot-smoke server, flips `ride.enabled`, records the client ride feel
+(E1/E2 client halves), then enters the End for `dxexp victory`/`victory2`
+(E4b: emergence timing vs. the ADR-0014 baseline window, gateway ring
+coordinates vs. the default scan bounds, trophy-egg flow alongside the
+lineage mint). Serverless fallback if no player is available: Phase 6
+groundwork — the three dimension-artifact state machines (ADR-0013,
+ADR-0009 style) now that every module convention is proven twice over.

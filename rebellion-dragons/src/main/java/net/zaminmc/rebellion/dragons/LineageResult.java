@@ -42,7 +42,8 @@ public record LineageResult(@NotNull LineageOutcome outcome, @Nullable String de
         return new LineageResult(outcome, detail, null, false);
     }
 
-    /** True for mint/hatch/death/claim/route/retire success AND idempotent no-ops. */
+    /** True for mint/hatch/death/claim/route/retire/pearl-heal/snapshot success
+     *  AND idempotent no-ops. */
     public boolean success() {
         return outcome == LineageOutcome.ISSUED
                 || outcome == LineageOutcome.ISSUED_ALREADY
@@ -52,6 +53,9 @@ public record LineageResult(@NotNull LineageOutcome outcome, @Nullable String de
                 || outcome == LineageOutcome.RECOVERY_ENTERED
                 || outcome == LineageOutcome.CLAIMED
                 || outcome == LineageOutcome.ROUTED
-                || outcome == LineageOutcome.RETIRED;
+                || outcome == LineageOutcome.RETIRED
+                || outcome == LineageOutcome.PEARL_HEALED
+                || outcome == LineageOutcome.SNAPSHOT_SAVED
+                || outcome == LineageOutcome.SNAPSHOT_STALE;
     }
 }

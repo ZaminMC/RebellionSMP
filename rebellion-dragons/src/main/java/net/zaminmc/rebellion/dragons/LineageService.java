@@ -206,7 +206,7 @@ public final class LineageService {
                             + ") slot " + slot, now);
             Lineage minted = new Lineage(lineageId, slot, LineageState.EGG_HELD, victor,
                     eggInstance, null, world, gatewayX, gatewayY, gatewayZ, null,
-                    0L, now, now);
+                    0L, null, null, null, null, 0L, now, now);
             return Attempt.terminal(LineageResult.changed(LineageOutcome.ISSUED, minted));
         }).thenCompose(attempt -> {
             if (attempt.retryRace()) {
@@ -551,6 +551,139 @@ public final class LineageService {
             Lineage updated = before.with(LineageState.RETIRED, null, r.eggInstance(),
                     null, null, now);
             return new Outcome(LineageResult.changed(LineageOutcome.RETIRED, updated), before);
+        }).thenApply(outcome -> publish(outcome));
+    }
+
+    // ------------------------------------------------------------------
+    // Pearl healing (CAS on the bound entity + cooldown; idempotent)
+    // ------------------------------------------------------------------
+
+    /**
+     * Records one pearl heal on the living pet: health moves to
+     * {@code newHealth} and the cooldown stamp advances to {@code nowUtc}.
+     * The compare-and-set pins the bound entity <em>and</em> requires the
+     * previous heal stamp to be at least {@code cooldownMs} old, so a
+     * retried interact event, a double-click or a duplicate delivery can
+     * never heal (or consume a pearl) twice — the second attempt affects
+     * zero rows and resolves to the typed {@code PEARL_COOLDOWN} refusal.
+     *
+     * <p>The caller consumes the physical pearl and applies
+     * {@code LivingEntity.heal(amount)} only after this reports
+     * {@link LineageOutcome#PEARL_HEALED}, so a refused heal never costs a
+     * pearl (master prompt §5.6: atomic pearl consumption + health update).</p>
+     *
+     * @param newHealth post-heal health (finite, 0 < h <= {@link
+     *                  LineagePolicy#MAX_HATCH_HEALTH}; the caller clamps to
+     *                  the entity's real maximum before calling)
+     * @param cooldownMs configured pearl-heal cooldown in milliseconds
+     */
+    public CompletableFuture<LineageResult> pearlHeal(@NotNull UUID lineageId,
+            @NotNull UUID entityUuid, double newHealth, long cooldownMs) {
+        if (lineageId == null || entityUuid == null) {
+            return CompletableFuture.completedFuture(LineageResult.failure(
+                    LineageOutcome.ARGUMENT_INVALID, "lineage and entity required"));
+        }
+        if (!Double.isFinite(newHealth) || newHealth <= 0.0
+                || newHealth > LineagePolicy.MAX_HATCH_HEALTH) {
+            return CompletableFuture.completedFuture(LineageResult.failure(
+                    LineageOutcome.ARGUMENT_INVALID,
+                    "health must be finite in 0 < health <= "
+                            + LineagePolicy.MAX_HATCH_HEALTH));
+        }
+        if (cooldownMs < 0) {
+            return CompletableFuture.completedFuture(LineageResult.failure(
+                    LineageOutcome.ARGUMENT_INVALID, "cooldown must not be negative"));
+        }
+        long now = clock.getAsLong();
+        long cooldownFloor = now - cooldownMs;
+        return db.transaction(tx -> {
+            Optional<LineageStore.LineageRow> row = LineageStore.byId(tx, lineageId);
+            if (row.isEmpty()) {
+                return new Outcome(LineageResult.failure(LineageOutcome.NOT_FOUND, null), null);
+            }
+            LineageStore.LineageRow r = row.get();
+            Lineage before = r.toDomain();
+            int affected = LineageStore.pearlHeal(tx, lineageId, entityUuid, newHealth,
+                    now, cooldownFloor, now);
+            if (affected != 1) {
+                return new Outcome(classifyPearlRefusal(r, entityUuid, cooldownFloor), before);
+            }
+            LineageStore.audit(tx, lineageId, "PEARL_HEAL", r.owner(),
+                    "health " + newHealth, now);
+            return new Outcome(LineageResult.changed(LineageOutcome.PEARL_HEALED,
+                    before.withPearlHeal(newHealth, now, now)), before);
+        }).thenApply(outcome -> publish(outcome));
+    }
+
+    private LineageResult classifyPearlRefusal(LineageStore.LineageRow r,
+            UUID entityUuid, long cooldownFloor) {
+        if (r.state() != LineageState.HATCHED) {
+            return LineageResult.failure(LineageOutcome.INVALID_STATE, "lineage not hatched");
+        }
+        if (!entityUuid.equals(r.entityUuid())) {
+            return LineageResult.failure(LineageOutcome.HATCH_CONFLICT, "stale entity binding");
+        }
+        return LineageResult.failure(LineageOutcome.PEARL_COOLDOWN,
+                "pearl heal cooldown active");
+    }
+
+    // ------------------------------------------------------------------
+    // Controller persistence snapshots (CAS on the bound entity)
+    // ------------------------------------------------------------------
+
+    /**
+     * Periodic controller persist for a living pet: last observed health
+     * and position plus the persist stamp. The compare-and-set pins the
+     * bound entity, so snapshots of a superseded or already-dead binding
+     * affect zero rows and are silently dropped (typed
+     * {@code SNAPSHOT_STALE} — the sweep treats it as a benign race, never
+     * an error). Health may be null when the entity was already gone by
+     * the time the snapshot was built.
+     */
+    public CompletableFuture<LineageResult> persistSnapshot(@NotNull UUID lineageId,
+            @NotNull UUID entityUuid, @Nullable Double health,
+            @NotNull Lineage.PersistedLocation location) {
+        if (lineageId == null || entityUuid == null || location == null) {
+            return CompletableFuture.completedFuture(LineageResult.failure(
+                    LineageOutcome.ARGUMENT_INVALID,
+                    "lineage, entity and location required"));
+        }
+        if (health != null && (!Double.isFinite(health) || health < 0.0
+                || health > LineagePolicy.MAX_HATCH_HEALTH)) {
+            return CompletableFuture.completedFuture(LineageResult.failure(
+                    LineageOutcome.ARGUMENT_INVALID,
+                    "health must be finite in 0 <= health <= "
+                            + LineagePolicy.MAX_HATCH_HEALTH));
+        }
+        String world = location.world().trim();
+        if (world.isEmpty() || world.length() > 64) {
+            return CompletableFuture.completedFuture(LineageResult.failure(
+                    LineageOutcome.ARGUMENT_INVALID,
+                    "world must be 1..64 characters"));
+        }
+        if (!Double.isFinite(location.x()) || !Double.isFinite(location.y())
+                || !Double.isFinite(location.z())) {
+            return CompletableFuture.completedFuture(LineageResult.failure(
+                    LineageOutcome.ARGUMENT_INVALID, "position must be finite"));
+        }
+        long now = clock.getAsLong();
+        return db.transaction(tx -> {
+            Optional<LineageStore.LineageRow> row = LineageStore.byId(tx, lineageId);
+            if (row.isEmpty()) {
+                return new Outcome(LineageResult.failure(LineageOutcome.NOT_FOUND, null), null);
+            }
+            LineageStore.LineageRow r = row.get();
+            Lineage before = r.toDomain();
+            int affected = LineageStore.snapshot(tx, lineageId, entityUuid, health,
+                    world, location.x(), location.y(), location.z(), now, now);
+            if (affected != 1) {
+                return new Outcome(LineageResult.unchanged(LineageOutcome.SNAPSHOT_STALE,
+                        "binding superseded", before), before);
+            }
+            // A snapshot is a real row mutation (health + loc + persist
+            // stamp), so it swaps the mirror like any other write.
+            return new Outcome(LineageResult.changed(LineageOutcome.SNAPSHOT_SAVED,
+                    before.withSnapshot(health, location, now, now)), before);
         }).thenApply(outcome -> publish(outcome));
     }
 

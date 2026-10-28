@@ -1,0 +1,99 @@
+# RebellionDragons messages. MiniMessage; every tag explicitly closed (the
+# loader validates this). Placeholders like <slot> / <player> are filled by
+# code at render time as unparsed/component values - user text is never
+# parsed as MiniMessage, so injection is structurally impossible.
+# Literal angle brackets escape only the opening bracket: \<name>.
+#
+# This file is the module's complete player-feedback contract: every key any
+# command, listener or controller path renders is pinned by
+# DragonsMessagesTest, which strict-parses this bundled file.
+
+prefix: "<gradient:#c0392b:#8e44ad>Rebellion</gradient> <dark_gray>»</dark_gray> <gray></gray>"
+
+common:
+  no-permission: "<red>You do not have permission to do that.</red>"
+  unavailable: "<red>That action is unavailable right now; nothing was changed. Please try again in a moment.</red>"
+
+usage: '<gray>Usage: /dragon \<hatch|status|call|mount|dismiss|attack|claim> - dragons are a finite server-wide lineage (cap <cap>).</gray>'
+player-only: "<red>Dragon commands are player-only.</red>"
+
+dragon:
+  hatch:
+    usage: '<red>Usage: /dragon hatch - hold your lineage egg in your main hand.</red>'
+    no-egg: "<red>Hold your lineage egg in your main hand to hatch it.</red>"
+    not-your-egg: "<red>That egg is not yours to hatch.</red>"
+    ok: "<green>Your lineage egg hatched - slot <slot> soars at <x>, <y>, <z>.</green>"
+    conflict: "<red>That egg cannot hatch (it is stale, cloned or already hatched). Nothing was consumed.</red>"
+  status:
+    none: "<gray>You do not own a dragon lineage. Win a legitimate Ender Dragon victory to be issued one.</gray>"
+    header: "<gray>Dragon lineage #<slot> -</gray> <state>"
+    detail: "<gray>State:</gray> <state> <gray>| Health:</gray> <health> <gray>| Last seen:</gray> <where>"
+    gateway: "<gray>Minted by gateway</gray> <white><origin></white> <gray>at <x>, <y>, <z>.</gray>"
+    pearl: "<gray>Pearl feeding:</gray> <white><pearl></white> <gray>| Fireball budget:</gray> <white><budget></white>"
+    state:
+      egg-held: "<aqua>egg (held)</aqua>"
+      egg-recovery: "<yellow>egg (recovery mailbox)</yellow>"
+      hatched: "<green>living pet</green>"
+      retired: "<dark_red>retired</dark_red>"
+    location-unknown: "unknown (never snapshotted)"
+    pearl-ready: "ready"
+  call:
+    ok: "<green>Your dragon answers - it hovers <offset> blocks above you.</green>"
+    cooldown: "<red>Your call is on cooldown for <seconds>s.</red>"
+    too-far: "<red>Your dragon is too far away to answer (<distance> blocks; limit <range>).</red>"
+    not-hatched: "<red>You have no living pet dragon to call.</red>"
+    not-found: "<red>Your dragon's entity could not be resolved - it has been returned to its egg and routed to the recovery mailbox.</red>"
+  mount:
+    disabled: "<red>Riding is disabled on this server (ride-feel verification pending).</red>"
+    ok: "<green>You mount your dragon. Look where you want to fly.</green>"
+    too-far: "<red>Your dragon is too far to mount - call it first.</red>"
+    not-hatched: "<red>You have no living pet dragon to mount.</red>"
+  dismiss:
+    ok: "<green>Your dragon settles into a stable hover.</green>"
+  attack:
+    usage: '<red>Usage: /dragon attack - aim your crosshair at a target within <range> blocks.</red>'
+    no-target: "<red>No target in reach of your crosshair.</red>"
+    ok: "<green>Your dragon unleashes a fireball at <target>.</green>"
+    budget: "<red>Your dragon's fireball budget is spent (<max> per <window>s window); <retry>s until a slot frees.</red>"
+    interval: "<red>Your dragon is still breathing in; wait <retry>s.</red>"
+    not-hatched: "<red>You have no living pet dragon to command.</red>"
+    friendly: "<red>Refusing: that target is you or an ally.</red>"
+  claim:
+    none: "<gray>You hold no lineage parked in the recovery mailbox.</gray>"
+    ok: "<green>Lineage #<slot> reissued to you - the fresh egg is in your inventory.</green>"
+    not-yours: "<red>That lineage is not claimable by you.</red>"
+
+feed:
+  ok: "<green>Your dragon eats the pearl (+<amount> health).</green>"
+  cooldown: "<red>Your dragon is still digesting (<seconds>s).</red>"
+  not-owner: "<red>Only <owner> can feed this dragon.</red>"
+  wrong-item: "<gray>Right-click your dragon with an Ender Pearl to feed it.</gray>"
+
+egg:
+  name: "<bold><gradient:#7d3fc9:#c0392b>Lineage Egg</gradient></bold> <dark_gray>#<slot></dark_gray>"
+  lore-1: "<gray>Dragon lineage #<slot> - one of a finite server-wide set.</gray>"
+  lore-2: "<gray>Hold and use</gray> <white>/dragon hatch</white> <gray>as the recorded holder.</gray>"
+  dropped: "<yellow>Your inventory was full - the lineage egg dropped at your feet. It cannot be destroyed.</yellow>"
+  undeliverable: "<yellow>The lineage egg could not be delivered - it is parked in the recovery mailbox.</yellow>"
+
+victory:
+  minted: "<green>Your victory opened a gateway - lineage #<slot> is yours. The egg is in your inventory.</green>"
+  cap: "<gray>Your victory opened a gateway, but the lineage cap (<cap>) is reached - vanilla rewards only.</gray>"
+
+admin:
+  usage: '<gray>Usage: /dragonadmin \<list|info \<slot>|route \<slot> \<player>|audit \<slot>|retire \<slot> confirm [reason]></gray>'
+  list-header: "<gray>Dragon lineages on this server (<count>/<cap>):</gray>"
+  list-empty: "<gray>No dragon lineage has ever been minted.</gray>"
+  list-line: "<gray>#<slot></gray> <state><gray> - owner <owner>, gateway <origin> <x>,<y>,<z></gray>"
+  not-found: "<gray>No lineage with that slot exists.</gray>"
+  audit-header: "<gray>Audit trail of lineage #<slot> (<count> entries):</gray>"
+  audit-line: "<gray>• <action> by <actor> at <time></gray><detail>"
+  audit-none: "<gray>No audit entries recorded.</gray>"
+  route:
+    usage: '<red>Usage: /dragonadmin route \<slot> \<player></red>'
+    not-online: "<red>That player is not online (routing requires a live inventory for egg delivery).</red>"
+    ok: "<green>Lineage #<slot> routed to <player> - the fresh egg is in their inventory.</green>"
+  retire:
+    usage: '<red>Usage: /dragonadmin retire \<slot> confirm [reason]</red>'
+    confirm: "<yellow>Retiring lineage #<slot> is TERMINAL: the slot and its gateway stay consumed forever. Re-run with the confirm keyword to proceed.</yellow>"
+    ok: "<green>Lineage #<slot> retired (audited; slot and gateway stay consumed).</green>"

@@ -193,3 +193,51 @@ teams module, only the owner manages.
 Own-network intel only: nearest *enemy* ward distance is Phase 7 tracking
 ritual scope and is deliberately not a placeholder. All reads are
 in-memory (index + team cache); no database access.
+
+## RebellionDragons (Phase 5, controller slice)
+
+All player feedback renders through the module's `messages.yml` catalog
+(ADR-0012) with user values as unparsed placeholders — injection is
+structurally impossible. Authority never comes from client input: egg
+identity is read from PDC stamps validated against the live registry,
+targets from the server-side crosshair raytrace.
+
+### `/dragon` — player-facing lifecycle (permission `rebellion.dragons.use`, default true)
+
+| Subcommand | Behavior | Enforced by |
+|---|---|---|
+| `hatch` | Hatches the lineage egg held in the main hand: spawns the pet in front/above the holder, binds it via the hatch CAS, consumes the egg only after the commit; a refused CAS (clone/stale/concurrent click) removes the spawn and keeps the egg | LineageService CAS + holder check |
+| `status` | Own lineage: state, health, last persisted position, pearl cooldown, fireball budget, gateway origin | mirror reads |
+| `call` | Recalls the living pet to a hover above the owner; per-owner cooldown; same-world range limit (cross-world always allowed); a pet whose chunk loads without it is reconciled into the recovery mailbox | in-memory cooldowns + persisted location |
+| `mount` | Mounts the owner onto their pet — **ships disabled** (`ride.enabled: false`) until the ADR-0008 ride-feel interactive gate passes | config gate + distance check |
+| `dismiss` | Dismounts riders and settles the pet into the stable HOVER platform | — |
+| `attack` | Fireball at the crosshair target within range; refuses owner/teammate targets; per-dragon rolling budget (default 30/60 s, hard ceiling 120) plus min-interval; vanilla impact semantics (no block damage, cloud on hit) | FireballBudget before spawn + hit-event cancellation |
+| `claim` | Reissues a recovery-mailbox lineage egg to its recorded claimant (fresh egg instance; pre-park clones stay inert) | claimant-gated CAS |
+
+Console is denied the whole `/dragon` family (player-only by design).
+
+### `/dragonadmin` — administration (permission `rebellion.dragons.admin`, default op)
+
+| Subcommand | Behavior |
+|---|---|
+| `list` | Every lineage ever minted with slot, state, owner, gateway origin (retired rows keep consuming slots) |
+| `info <slot>` | Status lines plus the full audit trail |
+| `audit <slot>` | Cold audit trail read (ISSUE/HATCH/DEATH_RETURN/PARK_RECOVERY/CLAIM/ADMIN_ROUTE/RETIRE/PEARL_HEAL rows) |
+| `route <slot> <player>` | Re-routes any egg lineage to an online player with a fresh egg instance; audited with the acting admin |
+| `retire <slot> confirm [reason]` | Terminal retirement; the literal `confirm` keyword in the same invocation is the required operator confirmation (ADR-0009 §6); audited; slot + gateway stay consumed forever |
+
+Nothing in the admin family mints lineages. The only mint path is
+`issueFromGateway` behind the boss-victory observer (ADR-0014).
+
+### PlaceholderAPI placeholders (expansion `rebellion`) — dragons
+
+| Placeholder | Value |
+|---|---|
+| `%rebellion_dragon_owned%` | `true`/`false` — does the viewer own a lineage |
+| `%rebellion_dragon_id%` | the viewer's lineage UUID, or unset |
+| `%rebellion_dragon_health%` | living pet's last persisted health, or unset |
+| `%rebellion_dragon_count%` | lineages ever minted (never shrinks) |
+| `%rebellion_dragon_cap%` | the effective server-wide cap |
+
+Privacy is structural: viewers see only their own lineage; all reads are
+in-memory mirror reads, never per-request SQL.

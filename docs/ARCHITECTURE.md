@@ -275,23 +275,57 @@ restart re-detects insiders as fresh entries; idle pairs prune after
 Measured pipeline costs live in `docs/PERFORMANCE.md` (no TPS claims —
 no live server in this environment; live profiling is the Phase 11 gate).
 
-## Dragons module (rebellion-dragons, Phase 5 — persistence layer + proven control surface)
+## Dragons module (rebellion-dragons, Phase 5 — controller slice, boot-verified)
 
 ADR-0008 (spike + live experiments, executed 2026-10-28) + ADR-0009
-(lineage registry). The module ships the API probe/spike test, the
-gateway-backed lineage persistence layer, and the committed
-`DragonExperiments` harness (`src/experiments`, never released). The
-server-side halves of the ADR-0008 gate are proven with measured
-values (mount platform `setAware(false)`+HOVER = 0.00 drift;
-`setPodium`+`FLY_TO_PORTAL` closed-loop steering at ~16 blocks/s;
-`kill()` death timeline with a 199-tick corpse window; heal clamp
-arithmetic; `DragonFireball` launch via the acceleration vector with
-zero block damage; chunk unload/reload preserving UUID/health/phase).
-**No production controller, listeners, commands or egg-item protection
-exist yet** — the controller phase now proceeds on the proven surface,
-while the client-side ride feel and the vanilla first-victory
-emission (player-gated End fight, bytecode-proven in ADR-0008) remain
-the documented interactive gates.
+(lineage registry) + ADR-0014 (gateway observation). The module now
+ships as the sixth installable plugin (`DragonsPlugin`, `plugin.yml`,
+boot-verified on Paper 26.3 build 226 alongside the whole family):
+API probe/spike test, gateway-backed lineage persistence (schema v1+v2),
+the production controller surface, and the committed `DragonExperiments`
+harness (`src/experiments`, never released). Every controller recipe is
+an ADR-0008 measurement (mount platform `setAware(false)`+HOVER = 0.00
+drift; `setPodium`+`FLY_TO_PORTAL` closed-loop steering at ~16 blocks/s
+with the change-phase event as guard; `kill()` death timeline with the
+199-tick corpse window as the death presentation; heal clamp arithmetic
+behind the pearl cooldown CAS; `DragonFireball` launch via the
+acceleration vector with zero block damage; chunk unload/reload
+preserving UUID/health/phase). The client-side ride feel and the
+vanilla first-victory emission (player-gated End fight,
+bytecode-proven in ADR-0008) remain the documented interactive gates —
+riding ships disabled-by-config until the ride-feel gate passes.
+
+**Controller wiring** (all entity/world operations on the main thread;
+all mutations through the async service CAS):
+
+- `GatewayObserver` (ADR-0014) — boss-victory observation: baseline
+  annulus scan (async chunk loads + snapshots, off-thread block sweep)
+  → cheap count poll → discovery scan → pure `GatewayDiff` decision →
+  `issueFromGateway` → stamped-egg delivery. Fail-closed on ambiguity,
+  scan miss, and uncredited kills; pets excluded even when the vanilla
+  fight adopts them.
+- `PetController` — hatch (spawn → CAS → consume-or-rollback), call /
+  recall (loaded entity teleports; unloaded resolves through the
+  persisted location via async chunk load; vanished entities reconcile
+  through the death CAS), mount/dismiss (HOVER platform; ride config
+  gate), closed-loop steer task, crosshair-targeted budgeted fireballs,
+  pearl feeding (CAS before consumption), water weakness, egg build /
+  delivery.
+- Listeners — `BossVictoryListener` (battle-gate + pet exclusion),
+  `PetLifecycleListener` (direct kill, owner PvP death with the death
+  presentation after the CAS commits, EntityRemoveEvent non-UNLOAD
+  reconciliation, mount bookkeeping), `EggProtectionListener`
+  (damage/combust/despawn/hopper/dispense/portal cancelled for live
+  stamps; stale clones stay unprotected by design),
+  `PetInteractListener` (pearl feed, water weakness, friendly-hit
+  cancellation via UUID-tracked fireballs, phase guard).
+- Tasks — 30 s persistence sweep (snapshots + orphan reconciliation +
+  budget hygiene) with a final flush in `onDisable` while Core's
+  database is still up; the steer task registers only while
+  `ride.enabled` (restart-only switch).
+- Placeholders — `DragonsPlaceholders` contributes `dragon_owned`,
+  `dragon_id`, `dragon_health`, `dragon_count`, `dragon_cap` (mirror
+  reads only; viewer's own lineage only).
 
 **Authority**: `LineageService` — transactional registry + in-memory
 mirror (by id / by egg instance / by entity / by gateway), same
@@ -330,12 +364,17 @@ ADMIN_ROUTE, RETIRE); idempotent no-ops write nothing. `auditTrail` is
 the admin forensics read.
 
 **Persistence**: `rb_dragons_lineages` + `rb_dragons_audit` (module key
-`dragons`, migration v1, portable SQLite/MySQL DDL) — see
-`docs/DATA_MODEL.md` for column semantics and `docs/STATE_MACHINES.md`
-for the transition table.
+`dragons`, migrations v1+v2, portable SQLite/MySQL DDL) — v2 adds the
+controller snapshot columns (`loc_world/loc_x/loc_y/loc_z`,
+`last_persist_utc`) additively; live-proven upgrading a v0 database to
+v2 in one boot. See `docs/DATA_MODEL.md` for column semantics and
+`docs/STATE_MACHINES.md` for the transition table (including the
+pearl-heal and snapshot CAS rows).
 
-**Config**: `DragonsConfig` — deliberately minimal (`dragons.max-lineages`
-only); ride/fireball/pearl tuning values arrive with the controller phase
-so no number ships unproven. Plugin wiring (plugin.yml, boot, service
-registration) lands with the controller; `config.yml` ships now to
-document the contract.
+**Config**: `DragonsConfig` — the full controller contract (§
+CONFIGURATION.md): measured defaults from ADR-0008, the §5.6 fireball
+budget (30/60 s, hard-validated ceiling 120), water weakness bounded
+1.0..4.0, call range/cooldown, hatch offsets, scan bounds and window
+for the ADR-0014 observer, and `ride.enabled: false` until the
+ride-feel interactive gate passes. `DragonsConfigTest` pins the shipped
+file and the `defaults()` factory to each other.

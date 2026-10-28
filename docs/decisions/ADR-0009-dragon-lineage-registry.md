@@ -1,6 +1,6 @@
 # ADR-0009 — Dragon lineage registry: 20 gateway-backed slots, egg-issuance idempotency, transfer-not-mint
 
-Date: 2026-10-28 · Status: accepted (persistence layer; controller/listeners remain gated by ADR-0008)
+Date: 2026-10-28 · Status: accepted (persistence layer implemented + tested; schema v2 added the controller snapshot columns in session 10 — pearl-heal and snapshot CAS rows extend the transition table; the gateway observation decision is ADR-0014)
 
 ## Context
 

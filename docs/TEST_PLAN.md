@@ -59,14 +59,25 @@ was run 3× consecutively with `--rerun-tasks` to confirm stability.
    idempotent death processing, restart mid-event reconciliation — the exact
    adversarial matrix from master prompt §14.
    - Dragons serverless portion: **automated** — `LineageServiceIT` (real
-     SQLite, 18 tests) covers gateway issuance races, cap races at the
+     SQLite, 21 tests) covers gateway issuance races, cap races at the
      configured and hard ceiling, hatch races (concurrent clicks, clones,
      stale instances, direct-hatch-from-recovery refusal), simultaneous
      owner+dragon death (exactly one egg), duplicate/stale death events,
      recovery claim gating (no claimant leak), admin route audit, terminal
-     retirement with slot/gateway staying consumed, and the full restart
-     round-trip. Remaining live-server portions: physical egg delivery/
-     destruction routing and the ADR-0008 experiment set.
+     retirement with slot/gateway staying consumed, the full restart
+     round-trip, **pearl-heal cooldown idempotency (event retry refused
+     before the pearl is consumed), entity-pinned snapshots (stale
+     bindings are typed no-ops), and snapshot/pearl-stamp restart
+     round-trips**. Controller arithmetic is pinned by
+     `FireballBudgetTest` (30/60 s cap, rolling eviction, min-interval,
+     per-dragon isolation, forward-pointing retry hints) and
+     `GatewayDiffTest` (ADR-0014 decision table: emerging-only mints,
+     registered exclusion, ambiguity refusal, scan-miss warning).
+     `DragonsMessagesTest` strict-parses the shipped messages.yml and pins
+     every rendered key; `DragonApi263SpikeTest.controllerSliceSurface`
+     probes the newly-used members. Remaining live-server portions:
+     physical egg delivery/destruction routing, the boss-victory
+     observation on a real kill, and the ADR-0008 interactive halves.
 5. **DB outage drills**: unique-asset creation under saturation = fail closed.
 
 ## Verified on Paper 26.3 (headless boot smoke, 2026-10-28)
@@ -189,10 +200,47 @@ into the status line. Details in ADR-0011.
       records `DragonEggFormEvent`, gateway count delta per victory,
       `hasBeenPreviouslyKilled()` transitions, 12000-vs-500 XP and the
       gateway ring coordinates.
-- [ ] Dragons lineage flow on Paper 26.3 (after the ADR-0008 gate passes,
-      when the controller/listener layer exists): observed gateway →
-      `issueFromGateway` mints once and `ISSUED_ALREADY` on duplicate;
+- [ ] Dragons lineage flow on Paper 26.3 (controller layer now exists —
+      interactive pass): observed gateway → `issueFromGateway` mints once
+      and `ISSUED_ALREADY` on duplicate (ADR-0014 observation window);
       egg PDC stamp round-trip; undeliverable delivery parks in recovery;
       hatch consumes the item only on service success; owner/dragon death
-      hands the egg to the killer; egg survives lava/void/explosion routing
-      into recovery (item protection listeners — controller phase).
+      hands the egg to the killer (idempotent CAS); egg survives
+      lava/void/explosion/despawn/hopper/dispense (protection listeners
+      shipped this session); `/dragon call` resolves an unloaded pet
+      through the persisted location; pearl feeding refuses event retries
+      inside the cooldown; fireball budget caps bursts; `/dragon mount`
+      after flipping `ride.enabled` (record the client ride feel — the
+      ADR-0008 interactive gate).
+
+Session 10 additions (same harness, upgrade-style boot on the existing
+smoke server database, fixed local jars at v0.1.0-dev.5 + the new
+RebellionDragons):
+
+- [x] Six installable jars (API, Core, Items, Teams, Wards, **Dragons**)
+      load and enable; Dragons registers the `dragons` module and reports
+      `0/20 lineages ever minted, victory observation on, riding disabled
+      (ADR-0008 ride-feel gate)` in its enable line.
+- [x] Live database upgrade: the dev.2-era sqlite (no dragons tables)
+      applies dragons v1+v2 in one boot ("Schema 'dragons' at migration
+      version 2"); second boot is a no-op (version already 2).
+- [x] First boot extracts Dragons `config.yml` + `messages.yml`
+      byte-identical to the bundled resources (md5-verified against
+      `src/main/resources`).
+- [x] Console surface: `dragon` from console renders the player-only
+      notice; `dragonadmin list` renders "No dragon lineage has ever been
+      minted."; `dragonadmin retire 1` without `confirm` renders the usage
+      (no lineage with that slot exists); `rebellion modules` lists all
+      five modules operational; `rebellion diagnose` writes a clean
+      report.
+- [x] Restart: version renders (`v0.1.0-dev.5`), no "Created default"
+      re-extraction, migrations do not re-apply, graceful reverse-order
+      shutdown with the final persistence sweep while Core's database is
+      still up.
+- [x] Zero ERROR/SEVERE/Exception lines in the whole session's server log.
+
+The session-10 smoke caught one real defect (fixed and re-verified on the
+restarted server in the same session): the Dragons jar shipped with an
+unexpanded `${version}` literal in `plugin.yml` (processResources expansion
+existed in every other module but Dragons had never shipped a descriptor),
+printing `RebellionDragons ${version} enabled`.

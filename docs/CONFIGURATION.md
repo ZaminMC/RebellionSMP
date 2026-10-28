@@ -212,7 +212,7 @@ Hiding/defending anchors is gameplay the plugin deliberately does not
  adjudicate. This is enforced structurally (ADR-0007): the ward schema has
 no fields that could express protection.
 
-### Dragons (RebellionDragons — persistence layer, ADR-0009)
+### Dragons (RebellionDragons — controller slice, ADR-0009/0014)
 
 ```yaml
 dragons:
@@ -222,20 +222,67 @@ dragons:
   # load time - never silently stretched. Boss victories at the cap
   # follow vanilla rewards but mint nothing.
   max-lineages: 20
+
+  egg:
+    # Material of the physical lineage-egg item. The item is stamped with
+    # (lineage, egg-instance) PDC identity; live stamps are indestructible
+    # (all destruction paths cancelled by the egg-protection listeners).
+    material: DRAGON_EGG
+
+  pet:
+    hatch-health: 200.0            # vanilla dragon max, measured (ADR-0008 E3/E5)
+    hatch-offset-forward: 12       # /dragon hatch spawn spot (blocks)
+    hatch-offset-up: 12
+    call:
+      max-range-blocks: 512        # same-world recall limit (cross-world always allowed)
+      cooldown-seconds: 30
+      hover-offset-blocks: 8       # park height above the owner (HOVER platform)
+    ride:
+      enabled: false               # INTERACTIVE GATE: client ride feel unverified
+      steer-interval-ticks: 8      # closed-loop podium re-target cadence (E2c)
+      look-ahead-blocks: 48
+    attack:
+      range-blocks: 64             # crosshair raytrace range
+      max-per-window: 30           # §5.6 budget; hard-validated ceiling 120
+      window-seconds: 60
+      min-interval-ms: 2000        # anti-burst guard
+    pearl-heal:
+      amount: 25.0                 # E5 measured heal(25) == +25
+      cooldown-seconds: 10         # cooldown CAS = retry idempotency
+    water-weakness:
+      damage-multiplier: 1.25      # bounded 1.0..4.0 at load: a penalty, never an instant death
+
+  boss-victory:
+    observe-enabled: true          # ADR-0014 scan-diff minting
+    scan:
+      radius-min-blocks: 48        # annulus around the exit portal
+      radius-max-blocks: 160       # (ring geometry: ADR-0008 E4b interactive gate)
+      y-min: 0
+      y-max: 256
+      poll-interval-ticks: 40
+      window-seconds: 90
 ```
 
-Load rules (validated by `DragonsConfigTest`):
+Load rules (validated by `DragonsConfigTest`, which also pins the shipped
+file and the `DragonsConfig.defaults()` factory to it):
 
 - `dragons.max-lineages` must be an integer in `1..20`. `0`, negatives and
   anything `> 20` fail config load with an actionable message naming the
   ceiling — the cap "cannot silently exceed the End gateway/lineage
-  policy" (master prompt §5.6).
-- As defense in depth, `LineageService` clamps the effective cap to the
-  same ceiling at runtime even if a caller bypasses loader validation
-  (proven by `LineageServiceIT.capCannotSilentlyExceedTheHardPolicyCeiling`).
+  policy" (master prompt §5.6). `LineageService` re-clamps at runtime as
+  defense in depth.
+- Every controller number is range-checked with the bound stated in the
+  issue text: fireball budget `1..120` per window, water multiplier
+  `1.0..4.0` (below 1.0 would be a water bonus — equally rejected),
+  scan radii ordered and `<= 512`, scan window `10..600 s`, pearl amount
+  `0 < a <= 1024`, steer interval `1..200` ticks. Nothing stretches
+  silently.
+- `ride.enabled` defaults to **false** and flipping it is restart-only
+  (the steer task registers at boot): the client-side ride feel is an
+  ADR-0008 interactive gate. The control loop itself is fully implemented.
+- The persistence sweep cadence is fixed at 600 ticks (30 s) — health and
+  position snapshots for loaded pets plus orphan reconciliation — and a
+  final flush runs at shutdown while Core's database is still up
+  (`DragonsPlugin.onDisable`).
 - Retirement never frees slots and no config value can revive a retired
   lineage: retired rows keep consuming their slot and gateway anchor.
-- Ride speed, fireball budgets, pearl-heal tuning and water-weakness
-  values are intentionally absent until the ADR-0008 live-server proofs
-  are recorded; shipping tuned-looking numbers for unproven behavior
-  would be guesswork.

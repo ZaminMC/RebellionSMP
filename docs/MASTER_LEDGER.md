@@ -60,6 +60,12 @@ its owning module has tests passing in `./gradlew test`.
 | Lineage recovery mailbox (park/claim/admin route) | rebellion-dragons | tested | claimant-gated claim (no claimant leak); admin route audited; recovery eggs exit only via claim/route (fresh instance each) |
 | Lineage retirement (audited, terminal) | rebellion-dragons | tested | RETIRED refuses every other transition; slot + gateway stay consumed (retire never frees a slot); rb_dragons_audit per mutation |
 | Dragons config contract (dragons.max-lineages) | rebellion-dragons | tested | DragonsConfigTest: 1..20 loud validation; ceiling clamps even bypassing loaders; shipped config.yml documents it |
+| Dragons plugin wiring + schema v2 (controller slice, session 10) | rebellion-dragons | verified-on-Paper-26.3 | DragonsPlugin + plugin.yml (6th installable jar); migration v2 adds loc_* + last_persist_utc columns (live upgrade proven: existing sqlite went dragons v0 -> v2); boot smoke: enable order, extraction byte-identity, restart idempotency, graceful reverse-order shutdown; caught + fixed live: ${version} not expanded |
+| Pet controller on the ADR-0008-proven surface | rebellion-dragons | implemented (server-side) | PetController: HOVER platform (E1), closed-loop podium steering + phase guard (E2c), E6-recipe fireballs with per-dragon FireballBudget (30/60s default, tested), pearl feeding behind the cooldown CAS (E5), call/recall through persisted location, water weakness 1.0..4.0-bounded, mount/dismiss; ride ships config-DISABLED (ride-feel interactive gate) |
+| Boss-victory gateway observation (ADR-0014) | rebellion-dragons | implemented (fail-closed) | GatewayObserver: baseline annulus scan (async chunks + snapshots, off-thread sweep) -> count poll -> discovery scan -> GatewayDiff (pure, tested: emerging-only, registered-excluded, ambiguity refused, miss warned) -> issueFromGateway -> egg delivery; no killer credited = no mint; pets excluded even when the vanilla fight adopts them |
+| Physical egg-item protection | rebellion-dragons | implemented (live-verify pending) | EggProtectionListener cancels damage/combust/despawn/hopper/dispense/portal for stacks carrying a LIVE egg-instance stamp; stale clones are inert by design (protection is stamp-based, not material-based) |
+| Pet lifecycle + reconciliation | rebellion-dragons | implemented (server-side) | direct kill -> killer receives egg (EntityDeathEvent); owner PvP death -> killer inherits egg + death presentation kill() after the CAS commits; EntityRemoveEvent(cause != UNLOAD) + 30s sweep reconcile vanished entities through the idempotent death CAS into the recovery mailbox |
+| /dragon + /dragonadmin command family | rebellion-dragons | implemented (console-verified) | hatch (PDC-stamped, holder-only, rollback on refused CAS), status, call (cooldown+range), mount, dismiss, attack (crosshair, budget, friendly refusal), claim; admin list/info/route/audit/retire with literal `confirm` keyword; DragonsPlaceholders: dragon_owned/id/health/count/cap (mirror reads only) |
 
 ## Roadmap (from master prompt §18)
 
@@ -70,7 +76,7 @@ its owning module has tests passing in `./gradlew test`.
 | 2 | Item identity, rarity registry, lore service, talisman tiers, DeluxeMenus-shaped menus | annotation flows complete and opt-in; PAPI item placeholder shipped; custom item registry with talisman family examples shipped; module enable + menu extraction live-verified; remaining: per-menu open_command registration, admin audit/recovery views over inventories, talisman activation mechanics, player-level menu flows |
 | 3 | Teams, chat, friendly-fire attribution | implemented + tested (unit level); module enable + migration live-verified; player flows (invites, chat) need interactive verification |
 | 4 | No-claim wards, calibrated distance, intel | implemented + tested (unit level); module enable + migration + persisted-ward load live-verified; km display disabled until calibrated; measured pipeline costs in docs/PERFORMANCE.md; ward walking/alert flows need interactive verification |
-| 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | spike delivered (ADR-0008: verified API surface, two removals found, live-experiment gate defined); production controls intentionally blocked until live proofs; lineage registry persistence layer delivered and tested (ADR-0009: registry, CAS idempotency for issue/hatch/death, recovery mailbox, audited retirement); remaining: ADR-0008 live experiments, then controller + egg-item listeners + commands |
+| 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | spike delivered and executed live (ADR-0008: measured mount/steer/death/heal/fireball/persistence surface; bytecode-proven player-gated End fight); lineage registry + CAS idempotency delivered (ADR-0009); controller slice delivered (session 10): plugin wiring, pet controller, gateway observation (ADR-0014), egg protection, commands, placeholders, schema v2 — boot-verified on Paper 26.3 build 226; remaining interactive gates: client ride feel + vanilla first-victory emission (E4b) |
 | 6 | Three dimension artifacts + Rebellion event | planned |
 | 7 | Rare souls, rituals, tracking | planned |
 | 8 | Brewing progression, potion bags, automation | planned |
@@ -169,3 +175,40 @@ Session additions (2026-10-28, ADR-0008 live experiments executed):
 - Boot-smoke environment note: the flat preset on 26.3 produces a
   void world (`No key layers in MapLike[{}]`) — harmless for module
   boot tests, unusable for any harness that needs ground.
+
+Session additions (2026-10-28, dragons controller slice — session 10):
+
+- The dragons module is now a real installable plugin (6th jar): plugin
+  wiring, commands, listeners, tasks, placeholders and module health all
+  follow the ADR-0011-proven boot pattern. Migration v2 (loc_* +
+  last_persist_utc) upgrades existing databases in place — live-proven on
+  the smoke server's dev.2-era sqlite going dragons v0 -> v2 in one boot.
+- Every controller recipe is an ADR-0008 measurement, not a guess: HOVER
+  platform (E1, 0.00 drift), closed-loop podium steering (E2c, ~16 b/s,
+  phase guard via the cancellable change-phase event), the four-vector
+  fireball recipe (E6), heal-clamp arithmetic (E5), kill() for the death
+  presentation (E3: bare sourceless damage() is filtered by vanilla).
+- Pearl healing and persistence snapshots are NEW CAS statements in the
+  same ADR-0009 style: the pearl cooldown stamp makes event retries
+  typed refusals before the pearl is consumed; snapshot writes pin the
+  bound entity so superseded bindings are benign no-ops.
+- Boss-victory minting decided in ADR-0014 (scan-diff): the module never
+  synthesizes gateways; it discovers the real END_GATEWAY that emerged in
+  the victory's observation window and mints only when the candidate set
+  exactly matches vanilla's announced count. No credited killer = no
+  mint (fail-closed WARN), pets never mint even when the vanilla fight
+  adopts them.
+- Caught live by the boot smoke and fixed: the dragons jar shipped with an
+  unexpanded `${version}` in plugin.yml (every other module had the
+  processResources expansion; dragons had never shipped a descriptor
+  before). Fixed + re-verified on the restarted server.
+- Honest scope of the slice: console-surface + boot-level verification
+  only (no player joined the smoke server, no boss died, no egg was
+  minted live). Player flows — hatch/call/ride/feed/attack, the E4b
+  first-victory emission with real gateway coordinates, and the client
+  ride feel — remain the documented interactive pass; riding ships
+  disabled-by-config until the ride-feel gate passes.
+- Speculative-spawn risk recorded: hatch spawns the entity before the
+  CAS binds it; a refused CAS removes the spawn, but a crash between
+  spawn and commit can leave one unbound dragon entity (harmless: it is
+  a vanilla dragon; the sweep never touches unbound entities).

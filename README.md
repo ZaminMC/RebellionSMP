@@ -17,7 +17,7 @@ Early development on the `develop` branch. Currently implemented:
 | RebellionItems | `RebellionItems-<version>.jar` | rarity registry + resolver, PDC item identity, lore annotation, talisman tiers, DeluxeMenus-shaped menu engine with two bundled menus — tested |
 | RebellionTeams | `RebellionTeams-<version>.jar` | atomic teams/invites/ranks/diplomacy, team + proximity chat, friendly-fire attribution — tested |
 | RebellionWards | `RebellionWards-<version>.jar` | no-claim watch wards, calibrated distance, outsider alerts, countermeasures — tested |
-| RebellionDragons | `RebellionDragons-<version>.jar` | dragon lineage persistence layer (20-slot registry) — tested; **not installable yet** (no plugin descriptor until the controller phase) |
+| RebellionDragons | `RebellionDragons-<version>.jar` | finite dragon lineages: 20-slot gateway-backed registry (ADR-0009), boss-victory gateway observation (ADR-0014), pet hatch/call/mount/steer/fire/heal controls on the ADR-0008-proven surface, protected lineage eggs, audited admin recovery — boot-verified on Paper 26.3; ride feel + vanilla first-victory emission are interactive gates (riding ships disabled) |
 
 Further modules (artifacts, rituals, alchemy, prison, cosmetics) are planned —
 see `docs/MASTER_LEDGER.md` for the phase roadmap and current status.
