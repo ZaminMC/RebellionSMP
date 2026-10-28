@@ -1,6 +1,6 @@
 # ADR-0008 — Dragon controller spike: verified Paper 26.3 surface and the live-verification gate
 
-Date: 2026-10-28 · Status: accepted (spike report; production controls gated)
+Date: 2026-10-28 · Status: accepted (spike report; production controls gated; live server-side proofs recorded below)
 
 ## Context
 
@@ -121,3 +121,200 @@ on a clean Paper 26.3 server whose results must be recorded in
 - The 20-lineage registry schema (ADR-0009, planned) is persistence-only
   work that does not depend on live behavior proofs and can proceed in a
   later session alongside the live experiments.
+
+---
+
+## Live verification results (Paper 26.3 build 226, 2026-10-28, session 9)
+
+The experiment set above was executed against a real, clean Paper 26.3
+build 226 server using the committed `DragonExperiments` harness
+(`rebellion-dragons/src/experiments`, built by
+`./gradlew :rebellion-dragons:dragonExperimentJar`; console-driven via
+`scripts/boot-smoke.sh`; the run log is reproduced in
+`docs/evidence/adr0008-experiments.log`). Every server-side question is
+now answered with measured values; the two client-side halves are the
+only remaining interactive gates.
+
+### Corrections to the serverless probe (the API surface was richer than probed)
+
+- `org.bukkit.boss.DragonBattle` in 26.3 ALSO exposes
+  `getGatewayCount()`, `spawnNewGateway()`, `spawnNewGateway(Position)`,
+  `generateEndPortal(boolean)`, `setPreviouslyKilled(boolean)`,
+  `resetCrystals()`, `getRespawnCrystals()` and `getHealingCrystals()`.
+  The probe statement "the API cannot ask the battle to emit a gateway"
+  is therefore outdated for 26.3 — the design decision is unchanged
+  (the module observes vanilla emission; it must never synthesize
+  gateways, now for policy rather than capability reasons).
+- `EnderDragon.getPodium()` / `setPodium(Location)` exists — this turned
+  out to be the key NMS-free steering primitive (E2c below).
+- `EntityRemoveEvent` lives at `org.bukkit.event.entity.EntityRemoveEvent`
+  (promoted out of the `io.papermc.paper` namespace in 26.3) with causes
+  `DEATH`, `DESPAWN`, `DROP`, `ENTER_BLOCK`, `EXPLODE`, `HIT`, `MERGE`,
+  `OUT_OF_WORLD`, `PICKUP`, `PLAYER_QUIT`, `PLUGIN`, `TRANSFORMATION`,
+  `UNLOAD`, `DISCARD`.
+- `DragonBattle.RespawnPhase` values: `START`, `PREPARING_TO_SUMMON_PILLARS`,
+  `SUMMONING_PILLARS`, `SUMMONING_DRAGON`, `END`, `NONE`.
+- `DragonBattle.getEndPortalLocation()` returns **null** until an exit
+  portal exists — on a fresh battle that means "until the first victory".
+  Consumers must null-check; the portal is not pre-generated.
+
+### E1 — mount mechanics (server-side half: verified)
+
+- `addPassenger(livingEntity)` returns true and fires
+  `EntityMountEvent` (uncancelled); `removePassenger` returns true and
+  fires `EntityDismountEvent`; the passenger is released free (+5y nudge).
+- The server-side passenger anchor is **dragon origin + (0, 3.0, 0)**
+  (stable from the second tick).
+- The dragon's phase logic keeps running with a rider (no forced
+  dismount, no phase reset).
+- **Stable mountable platform**: `setAware(false)` +
+  `setPhase(HOVER)` holds position with **0.00 blocks drift over 5 s**
+  and zero velocity. This is the mount/steer chassis for pet dragons.
+- Interactive gate (unchanged): where a real *player* rider renders
+  client-side on a large entity, and whether that feel is acceptable
+  without protocol work (community reports it is not, by default).
+
+### E2 — steering primitives (server-side half: verified, two dead ends closed)
+
+- (a) `setVelocity(...)` on an AI-driven dragon: **displacement 0.00
+  blocks over 2 s** — phase AI swallows velocity writes. Dead end.
+- (b) Paper `getPathfinder().moveTo(location, speed)`: returns **false**
+  and moves the dragon **0.00 blocks over 4 s** — the ground pathfinder
+  is inert on flying bosses. Dead end (as suspected, but now proven).
+- (c) `setPodium(target)` + `setPhase(FLY_TO_PORTAL)`: **works**. The
+  dragon flew from (0,100,0) toward the configured podium ~16 blocks/s
+  (distance 37.3 → 13.7 in 3 s), overshot by ~16 blocks, then parked
+  without further phase transitions (15 s observation). Steering model
+  for the controller: **closed-loop waypoint steering** — periodic
+  `setPodium` re-targeting + phase, with `EnderDragonChangePhaseEvent`
+  (cancellable, `setNewPhase`) as the control hook. No NMS required.
+
+### E3 — death under control (verified)
+
+- **Sourceless `damage()` does not hurt EnderDragons in 26.3** —
+  `damage(30)` and `damage(2000)` with no source left health at 200.0
+  (confirmed in three independent runs). Unit tests and the controller
+  must never assume generic `damage()` works on dragons; use
+  `damage(amount, entity)`, `kill()` or `setHealth`.
+- `kill()`: `EntityDeathEvent` fires the same tick with `killer=null`,
+  `droppedExp=500` (the repeat-kill reward amount, NOT 12000 — the
+  first-kill 12000 is granted by the battle flow, not the entity event),
+  `drops` empty (dragons drop no items).
+- The corpse lingers for the death animation: entity removal
+  (`EntityRemoveEvent`) fires **199 ticks after** the death event,
+  cause=`DEATH`. For a summoned dragon `getDeathAnimationTicks()` reads
+  0 while alive, yet the ~200-tick animation still runs.
+- Removal-cause taxonomy verified live: `DEATH` (kill), `UNLOAD`
+  (chunk unload, entity saved), `PLUGIN` (`remove()`).
+- Consequence for ADR-0009 wiring: hook `EntityDeathEvent` for the
+  lineage death-CAS (immediate, idempotent); treat the ~200-tick corpse
+  window as the death-presentation period; do not wait for removal to
+  run lineage logic.
+
+### E4 / E4b — vanilla gateway + egg emission (headless-blocked; bytecode-proven; interactive)
+
+The harness could not obtain a battle dragon without a player, and the
+reason is now proven from the 26.3 server bytecode rather than assumed:
+
+- The End battle does **not** spawn a dragon on world load.
+  `EnderDragonFight.tick()` — which calls `findOrCreateDragon()` (adopts
+  any dragon in the End, else `createNewDragon()`) — is invoked by
+  `ServerLevel.tick` **only when at least one player is in the End**
+  (`ServerLevel.tick` bytecode: the `dragonFight` branch is guarded by
+  the players-present flag).
+- Every headless acquisition route was tried and measured:
+  plugin-spawned dragon in the End does not link (fight never scans
+  without ticking); `setRespawnPhase(SUMMONING_DRAGON)` returns false on
+  a fresh battle; the no-arg `initiateRespawn()` no-ops without ritual
+  crystals; `generateEndPortal(true)` works (portal blocks +
+  `TheEndPortalBlockEntity`) but the previouslyKilled dance still fails
+  because `respawnDragon()` additionally requires the internal
+  `dragonKilled` flag (no Bukkit setter; interlock:
+  `if (!previouslyKilled && dragonKilled) dragonKilled = false`);
+  staging a dragon on disk and restarting does not get it adopted for
+  the same player-gated reason.
+- `initiateRespawn(Collection<EnderCrystal>)` is the real ritual entry
+  (crystal positions are recorded, not validated — they are beam
+  sources for the pillar-healing animation), but it sits behind the same
+  `dragonKilled` precondition, which only a real death in a ticking
+  fight can satisfy.
+- **Interactive gate**: one player entering the End starts the vanilla
+  fight (dragon spawns on first entry); the committed harness then
+  observes the first legit victory (`dxexp victory`) and the repeat
+  (`dxexp victory2`): egg emission via `DragonEggFormEvent` at the Paper
+  FQN, gateway count delta per victory, `hasBeenPreviouslyKilled`
+  transitions, first-kill 12000 vs repeat 500 XP, and the gateway ring
+  coordinates the ADR-0009 mint path keys on.
+
+### E5 — heal (verified)
+
+- `heal(25)` on a staged wound (170/200) yields exactly 195; `heal(500)`
+  clamps to max (200) — no overshoot, no phase interference (stayed
+  HOVER), no exception. Pearl-feeding arithmetic is safe on this API.
+
+### E6 — fireball launch (verified)
+
+- `setDirection(...)` alone leaves a spawned `DragonFireball`
+  **motionless** (10 s, zero displacement) — Paper drives these
+  projectiles through the acceleration/power vector. The launch recipe
+  that works: `setDirection` + `setAcceleration` + `setPower` +
+  `setVelocity`.
+- With acceleration set, the fireball flies and impact fires
+  **`EnderDragonFireballHitEvent` with `getAreaEffectCloud()` present
+  (cancellable) and a `getTargets()` list** — the exact hooks for the
+  fireball budget and friendly-fire checks.
+- **No block damage**: impact block unchanged, zero
+  `EntityExplodeEvent`, dragon fireballs do not break blocks (vanilla
+  semantics hold — no special handling needed beyond never switching to
+  a block-breaking projectile).
+- Natural-shot hooks confirmed present for the budget:
+  `EnderDragonShootFireballEvent`, `EnderDragonFlameEvent` (both
+  cancellable; the flame event exposes the `AreaEffectCloud`).
+
+### E7 — chunk unload/reload persistence (verified)
+
+- `teleport` works on dragons (2000, 100, 2000 measured).
+- Unloading the dragon's chunk fires `EntityRemoveEvent(cause=UNLOAD,
+  valid=false)`; `Bukkit.getEntity(uuid)` is null while unloaded.
+- Reloading the chunk re-adds the **same UUID**
+  (`EntityAddToWorldEvent` + `EntitiesLoadEvent`) with health and phase
+  preserved (200/HOVER → 200/HOVER). The entity-level persistence
+  contract for pet dragons across chunk boundaries is proven; ADR-0009's
+  entity-UUID binding survives unload/reload by construction.
+- Harness caution recorded: a far dragon's manually reloaded chunk is
+  subject to normal auto-unload (~seconds without a ticket) — the
+  controller must keep or re-acquire tickets around pet dragons (the
+  first live kill attempt raced an auto-unload and lost, cause=UNLOAD).
+
+### Harness/environment findings worth keeping
+
+- `scripts/boot-smoke.sh`'s flat-world profile produces an **empty
+  (void) flat world** on 26.3 — the generator logs
+  `No key layers in MapLike[{}]` and applies no layers. Harmless for
+  boot/module smoke tests; future harnesses that need ground should not
+  rely on this preset.
+- The End world is created on demand (not at boot) in 26.3; the
+  harness's `WorldCreator` fallback is therefore required, not optional.
+- `EntityRemoveEvent` fires with `valid=true` for `PLUGIN` removals and
+  `valid=false` for `DEATH`/`UNLOAD` — consumers must not conflate the
+  flag with persistence.
+
+## Consequences (updated by the live results)
+
+- The §5.6 implementation gate is satisfied at the server-side level
+  for all five mandated proofs (mounting, flight control, fireball
+  launch, unload/reload, death behavior). Production controller work
+  may proceed on that basis.
+- Locked-in controller decisions from the measurements: mount platform
+  = `setAware(false)` + `HOVER`; steering = closed-loop podium
+  re-targeting (`setPodium` + `FLY_TO_PORTAL`, `EnderDragonChangePhaseEvent`
+  as the guard); fire attack = plugin-launched `DragonFireball` with
+  acceleration + `EnderDragonFireballHitEvent` budget hooks (never a
+  block-breaking projectile); death = `EntityDeathEvent`-triggered
+  lineage CAS with the ~200-tick corpse window reserved for the death
+  presentation; damage/health manipulation via `damage(amount, source)`,
+  `setHealth` or `kill()` — never bare `damage()`.
+- The ride *feel* (client-side rider rendering) and the vanilla
+  first-victory emission (E4/E4b) remain the two interactive gates; the
+  harness is committed and ready for both. Until the ride-feel gate
+  passes, rideable behavior ships disabled by configuration.

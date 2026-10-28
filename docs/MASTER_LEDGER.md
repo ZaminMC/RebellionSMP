@@ -135,3 +135,37 @@ Session additions (2026-10-28, module message catalogs — ADR-0012):
   carried an unclosed `<gray>` masked by lenient MiniMessage.
 - MiniMessage escape knowledge recorded: `\<` escapes a literal opening
   bracket, `\>` does not exist (backslash stays literal).
+
+Session additions (2026-10-28, ADR-0008 live experiments executed):
+
+- The ADR-0008 live-verification gate is satisfied at the server-side
+  level on Paper 26.3 build 226: mount mechanics, steering primitives,
+  death timing, heal arithmetic, fireball launch and chunk
+  unload/reload persistence are all measured and recorded
+  (`docs/evidence/adr0008-experiments.log`, analysis in ADR-0008).
+  Committed harness: `rebellion-dragons/src/experiments` (the
+  `experiments` source set, `dragonExperimentJar` Gradle task, jar
+  deliberately invisible to release staging).
+- Locked-in controller decisions from the measurements: mount platform
+  `setAware(false)`+HOVER; steering via closed-loop `setPodium`+
+  `FLY_TO_PORTAL` re-targeting (velocity writes and the Paper
+  pathfinder are proven dead ends on dragons); fire attack via
+  plugin-launched `DragonFireball` (acceleration vector required;
+  hit/flame/shoot events are the budget hooks; zero block damage);
+  death flow keyed on `EntityDeathEvent` with the ~200-tick corpse
+  window as the death presentation.
+- Corrections recorded against the serverless probe: 26.3 exposes
+  `DragonBattle.getGatewayCount()`/`spawnNewGateway()`/`generateEndPortal(boolean)`/
+  `setPreviouslyKilled(boolean)` (no-gateway-synthesis stays a POLICY,
+  no longer a capability limit); `EnderDragon.getPodium()/setPodium()`
+  exists; `EntityRemoveEvent` is `org.bukkit.event.entity.*` in 26.3.
+- Honest blocker, bytecode-proven: the End fight only ticks while a
+  player is in the End, so the vanilla first-victory/repeat-victory
+  observation (egg emission, gateway ring, 12000-vs-500 XP) and the
+  client-side ride feel remain interactive gates with the harness
+  ready (`dxexp victory`, `dxexp victory2`). Sourceless `damage()` is
+  filtered by dragons (three runs) — tests and controller must use
+  sourced damage, `kill()` or `setHealth`.
+- Boot-smoke environment note: the flat preset on 26.3 produces a
+  void world (`No key layers in MapLike[{}]`) — harmless for module
+  boot tests, unusable for any harness that needs ground.

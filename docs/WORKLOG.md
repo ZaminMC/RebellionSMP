@@ -684,3 +684,82 @@ green (verified with `./gradlew test --rerun-tasks` before any change).
   controller slice + plugin wiring. Serverless fallback: Phase 6
   groundwork — the dimension-artifact state machine (now ADR-0013) in the
   tested style of ADR-0009.
+
+## 2026-10-28 — Session 9: ADR-0008 live experiments executed — the dragon control surface is now measured
+
+**Session context**
+
+Token rotation interrupted by a lost context window: the rotated PAT
+value existed only in the conversation and was never staged to disk
+(swept history, tmp, tool-results, repo). Nothing was broken — the
+session-7 token remained fully valid (API 200, full scopes), the
+`ABASING_TOKEN` secret (updated 00:32Z) had just driven the successful
+dev.4 release, so development proceeded on the working credentials and
+the swap is re-runnable whenever the new PAT is re-supplied.
+
+**What ran**
+
+The five ADR-0008 experiments plus the §5.6 implementation-gate extras
+(fireball launch, chunk unload/reload) were executed against a real,
+clean Paper 26.3 build 226 server through a new committed harness:
+`rebellion-dragons/src/experiments` (a non-shipped `experiments` source
+set; `./gradlew :rebellion-dragons:dragonExperimentJar` builds
+`DragonExperiments.jar` into `build/experiment-libs/`, deliberately
+invisible to release staging; console-driven via the session-7
+boot-smoke script). Raw evidence: `docs/evidence/adr0008-experiments.log`.
+
+**Measured results (full analysis in ADR-0008)**
+
+- E1 mount: `addPassenger` works, `EntityMountEvent`/`EntityDismountEvent`
+  fire; server-side passenger anchor is dragon origin + (0, 3.0, 0);
+  `setAware(false)` + `HOVER` is a 0.00-drift stable platform over 5 s.
+- E2 steering: velocity writes = 0.00 displacement (dead end); Paper
+  pathfinder returns false and moves nothing (dead end);
+  `setPodium(target)` + `FLY_TO_PORTAL` flies the dragon ~16 blocks/s
+  toward the configured point — closed-loop waypoint steering works
+  with no NMS.
+- E3 death: sourceless `damage()` is IGNORED by dragons (three runs);
+  `kill()` fires `EntityDeathEvent` the same tick (droppedExp=500, no
+  item drops, killer=null) and the corpse lingers 199 ticks before
+  `EntityRemoveEvent(cause=DEATH)` — the death-presentation window.
+- E5 heal: `heal(25)` on a staged wound is exact (170→195), overheal
+  clamps to max, no phase interference.
+- E6 fireball: `setDirection` alone leaves a `DragonFireball`
+  motionless — the acceleration/power vector launches it;
+  `EnderDragonFireballHitEvent` fires with the `AreaEffectCloud`
+  (cancellable) and zero block damage.
+- E7 persistence: teleport + chunk unload fires
+  `EntityRemoveEvent(UNLOAD)`; reload restores the same UUID with
+  health/phase intact (`EntityAddToWorldEvent`).
+- E4/E4b (vanilla egg/gateway emission): headless-blocked and
+  bytecode-proven — `EnderDragonFight.tick()` only runs while a player
+  is in the End, and every acquisition route (summon-link,
+  `setRespawnPhase`, the previouslyKilled dance, `generateEndPortal` +
+  crystal ritual, staged-dragon adoption) funnels into that gate. The
+  committed harness is ready for the interactive pass
+  (`dxexp victory` / `dxexp victory2`).
+
+**API corrections recorded** (ADR-0008 addendum): 26.3 exposes
+`DragonBattle.getGatewayCount()`/`spawnNewGateway()`/
+`generateEndPortal(boolean)`/`setPreviouslyKilled(boolean)`;
+`EnderDragon.getPodium()/setPodium()`; `EntityRemoveEvent` is
+`org.bukkit.event.entity.*`. Also: `getEndPortalLocation()` is null
+pre-victory; the boot-smoke flat preset yields a void world on 26.3.
+
+**Honest limitations**
+
+- No player ever joined: client-side rider render/feel and the vanilla
+  first-victory emission remain the two documented interactive gates.
+- The dragons controller, plugin.yml, commands and egg-item protection
+  are still unwired — the next unit, now unblocked on the proven
+  server-side surface.
+
+**Next task**
+
+- Phase 5 controller slice over `LineageService` informed by the
+  measurements: DragonsPlugin wiring (plugin.yml makes the jar
+  installable and release-staged automatically), boss-victory mint
+  hooks, pet controller (mount platform, podium steering, fireball
+  token bucket, pearl feeding), `/dragon` command family, egg-item
+  protection listeners, tests. Then the interactive pass for the ride
+  feel and E4/E4b.

@@ -161,14 +161,34 @@ into the status line. Details in ADR-0011.
       (held amethyst shard) suppression; decoy labeling; `/wardadmin mask`;
       anchor break/explosion removes the ward with the breaker message;
       `%rebellion_nearest_ward_distance%` with PAPI installed.
-- [ ] Dragon live experiments (ADR-0008 gate — required before any
-      production dragon controls): mounted rider position/animation;
-      steering option comparison (velocity vs pathfinder vs phase control
-      with `setAware(false)`); death event timing + `EntityRemoveEvent`
-      cause ordering during the death animation; vanilla first-victory
-      `DragonEggFormEvent` (Paper FQN) + gateway emission +
-      `hasBeenPreviouslyKilled()` behavior across repeated victories;
-      `heal(double)` mid-flight interference.
+- [x] Dragon live experiments (ADR-0008 gate — server-side halves
+      **executed and recorded 2026-10-28**, evidence:
+      `docs/evidence/adr0008-experiments.log`, full analysis in
+      ADR-0008): mount mechanics (server anchor (0, 3.0, 0);
+      `setAware(false)`+HOVER platform = 0.00 drift over 5 s);
+      steering comparison (velocity: 0.00 displacement — dead end;
+      pathfinder: returns false, 0.00 displacement — dead end;
+      `setPodium`+`FLY_TO_PORTAL`: works, ~16 blocks/s closed-loop
+      re-targeting); death timing (`kill()` → `EntityDeathEvent` same
+      tick, droppedExp=500, no drops, killer=null → removal
+      `EntityRemoveEvent(cause=DEATH)` **199 ticks later**; sourceless
+      `damage()` ignored — dragons filter it); heal arithmetic
+      (170 +25 → 195, +500 → clamp 200, no phase interference);
+      fireball launch (`setDirection` alone = motionless; with
+      `setAcceleration`+`setPower`+`setVelocity` it flies and
+      `EnderDragonFireballHitEvent` fires with the `AreaEffectCloud`,
+      zero block damage); chunk unload/reload (same UUID, health/phase
+      preserved, `EntityRemoveEvent(UNLOAD)` ↔ `EntityAddToWorldEvent`).
+- [ ] Dragon live experiments — the two interactive halves that need a
+      human: (1) client-side rider render position/feel for a mounted
+      player (gates the rideable feature flag); (2) the vanilla
+      first-victory + repeat-victory observation (E4/E4b) — the End
+      fight only ticks with a player present (bytecode-proven, see
+      ADR-0008), so one player must enter the End, then the committed
+      `DragonExperiments` harness (`dxexp victory`, `dxexp victory2`)
+      records `DragonEggFormEvent`, gateway count delta per victory,
+      `hasBeenPreviouslyKilled()` transitions, 12000-vs-500 XP and the
+      gateway ring coordinates.
 - [ ] Dragons lineage flow on Paper 26.3 (after the ADR-0008 gate passes,
       when the controller/listener layer exists): observed gateway →
       `issueFromGateway` mints once and `ISSUED_ALREADY` on duplicate;

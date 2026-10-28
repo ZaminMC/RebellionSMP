@@ -275,15 +275,23 @@ restart re-detects insiders as fresh entries; idle pairs prune after
 Measured pipeline costs live in `docs/PERFORMANCE.md` (no TPS claims —
 no live server in this environment; live profiling is the Phase 11 gate).
 
-## Dragons module (rebellion-dragons, Phase 5 — persistence layer only)
+## Dragons module (rebellion-dragons, Phase 5 — persistence layer + proven control surface)
 
-ADR-0008 (spike) + ADR-0009 (lineage registry). The module currently
-ships exactly what the master prompt's phase ordering allows before the
-live-server proofs: the API probe/spike test and the gateway-backed
-lineage persistence layer. **No controller, listeners, commands or egg-item
-protection exist yet** — those are gated on the ADR-0008 live experiment
-set on a real Paper 26.3 server (mount feel, steering, death timing,
-vanilla gateway/egg emission, pearl healing).
+ADR-0008 (spike + live experiments, executed 2026-10-28) + ADR-0009
+(lineage registry). The module ships the API probe/spike test, the
+gateway-backed lineage persistence layer, and the committed
+`DragonExperiments` harness (`src/experiments`, never released). The
+server-side halves of the ADR-0008 gate are proven with measured
+values (mount platform `setAware(false)`+HOVER = 0.00 drift;
+`setPodium`+`FLY_TO_PORTAL` closed-loop steering at ~16 blocks/s;
+`kill()` death timeline with a 199-tick corpse window; heal clamp
+arithmetic; `DragonFireball` launch via the acceleration vector with
+zero block damage; chunk unload/reload preserving UUID/health/phase).
+**No production controller, listeners, commands or egg-item protection
+exist yet** — the controller phase now proceeds on the proven surface,
+while the client-side ride feel and the vanilla first-victory
+emission (player-gated End fight, bytecode-proven in ADR-0008) remain
+the documented interactive gates.
 
 **Authority**: `LineageService` — transactional registry + in-memory
 mirror (by id / by egg instance / by entity / by gateway), same

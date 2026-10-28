@@ -1,0 +1,19 @@
+name: DragonExperiments
+version: 26.3-adr0008
+main: net.zaminmc.rebellion.dragons.experiment.DragonExperimentsPlugin
+api-version: '26.3'
+load: POSTWORLD
+description: ADR-0008 live-verification harness for RebellionSMP Phase 5 (master prompt 5.6 implementation gate). Console-driven scripted experiments on a throwaway server - NEVER install on a production server.
+authors: [Abasing]
+website: https://github.com/ZaminMC/RebellionSMP
+
+commands:
+  dxexp:
+    description: Run ADR-0008 dragon experiments (console).
+    usage: /dxexp <setup|status|spawn|mount|steer|heal|fireball|persist|death|victory|victory2|report>
+    permission: dxexp.console
+
+permissions:
+  dxexp.console:
+    description: Console-only experiment driver.
+    default: op
