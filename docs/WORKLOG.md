@@ -886,3 +886,105 @@ coordinates vs. the default scan bounds, trophy-egg flow alongside the
 lineage mint). Serverless fallback if no player is available: Phase 6
 groundwork — the three dimension-artifact state machines (ADR-0013,
 ADR-0009 style) now that every module convention is proven twice over.
+
+## 2026-10-28 — Session 11: PAT rotation completed + Phase 6 groundwork recovered, verified and landed (ADR-0013)
+
+**Session context**
+
+The token rotation pending since session 9 finally went through: the
+user re-supplied the new PAT, it verified clean (GET /user = 200
+Abasing, id 140362885, full classic scopes incl. repo/workflow/
+admin:repo_hook), `ABASING_TOKEN` was re-encrypted and PUT over the
+GitHub Actions secrets API (HTTP 204, updated_at 04:40:34Z), and the
+git remote was re-pointed — fetch/push verified before the old pair
+was left behind. The credential pair (remote + secret) is consistent
+again; releases and pushes ride the new token.
+
+The session then became a recovery: the previous session had started
+the Phase 6 groundwork (the documented serverless fallback) and
+overflowed its context window mid-flight, leaving the work uncommitted
+— a complete `rebellion-artifacts` module, ADR-0013, and five doc
+updates, but no README/ledger/WORKLOG pass and no commit.
+
+**Protocol**
+
+Pulled develop (be0e9e6, dev.6 bump; already up to date — the tree
+changes were local), re-read the master prompt (md5 a84a5323
+unchanged, 615 lines), audited the uncommitted work against §5.5 and
+ADR-0013 before touching anything.
+
+**Verified (the interrupted session's work, audited this session)**
+
+- **ADR-0013** (`docs/decisions/ADR-0013-dimension-artifact-registry.md`):
+  one registry table dimension-keyed (exactly three rows, seeded only
+  by the idempotent load, no gameplay mint path, count != 3 fails the
+  load), instance-stamped possession where every hand-change supersedes
+  the live stamp (clones/stale copies resolve INSTANCE_STALE and can
+  never move a row), five states (ORIGIN/HELD/LOST/RETURNING/SPENT)
+  with every transition a compare-and-set, the return pipeline as two
+  individually idempotent CAS steps (delay + active-event gated), and
+  the Rebellion event as a singleton-guard CAS — once per occurrence,
+  copy-proof without event-layer dedup, spend all-or-none in one
+  transaction, complete-and-reconquer mints a new durable event id.
+- **`rebellion-artifacts`** (11 main classes + config.yml, ADR-0009
+  precedent: no plugin descriptor, not installable, exercised through
+  the tested service surface): `ArtifactService` (transactional
+  authority + post-commit mirror, the teams/wards/dragons strategy),
+  `ArtifactStore`/`ArtifactsSchema` (four tables:
+  rb_artifacts_registry, rb_artifacts_audit, rb_artifacts_events,
+  rb_artifacts_event_guard; migration v1, portable SQLite/MySQL DDL),
+  `ArtifactsConfig` (per-dimension origin anchors as config-owned
+  data, return delay, event toggle, HOLDER-only scope — TEAM is a loud
+  unimplemented error per §5.5's separate-option rule),
+  `Artifact`/`ArtifactKey`/`ArtifactState`/`ArtifactOutcome`/
+  `ArtifactResult`/`RebellionEvent` domain records.
+- **Docs already written by the interrupted session** (verified
+  consistent this session): ARCHITECTURE (+73), CONFIGURATION (+54),
+  DATA_MODEL (+67), STATE_MACHINES (+78), TEST_PLAN (+18).
+- **Tests**: `ArtifactServiceIT` (22, real SQLite through Core's actual
+  DatabaseService): exactly-three seed + idempotency, config-owned
+  anchor re-sync without touching gameplay state, capture/transfer/
+  find races (cloned + forged stamps lose), idempotent loss, the
+  return-delay gate + active-event refusal, arrival idempotency,
+  Rebellion qualification (two-of-three and split holders refused),
+  once-per-occurrence trigger idempotency, the disabled-toggle
+  refusal, all-or-none spending (typed SPENT_CONFLICT on retry), guard
+  release + second occurrence, admin routing of stuck states only,
+  audit discipline (no-ops write nothing), the full restart
+  round-trip. `ArtifactsConfigTest` (10) pins the shipped config.yml
+  to the defaults factory, anchor/delay bounds and the TEAM refusal.
+
+**This session's completions**
+
+- README module table: RebellionArtifacts row (not yet installable) +
+  removed artifacts from the "further modules" line.
+- MASTER_LEDGER: six artifacts rows (registry, possession CAS, loss +
+  return pipeline, Rebellion event, admin route + audit, config
+  contract), Phase 6 roadmap row flipped from "planned" to the
+  delivered persistence layer with honest remaining scope, session-11
+  additions entry.
+- Full build + forced test rerun: **368 tests green, 0 failures, 0
+  skipped** (api 8, core 44, items 91, teams 50, wards 86, dragons 57,
+  artifacts 32) — stable across the rerun; the six baseline modules
+  are untouched (same counts as session 10).
+
+**Honest scope**
+
+The persistence layer is complete and tested but serverless: no
+plugin.yml (installing it as a server plugin is not a supported
+state), and the encounter/structure, physical item flows, catastrophe
+effects (dimension instability, global warnings, maximum-health scars
+— the Phase 9 profile surface), the world-wide purge power, commands
+and `%rebellion_artifact_*` placeholders are controller-phase work,
+exactly as ADR-0009 preceded the dragons controller. Nothing here has
+been booted on Paper (there is nothing to boot), and no player flow
+exists yet.
+
+**Next task**
+
+Either the interactive pass on the committed dragons harness (one
+player joins the boot-smoke server: ride feel with `ride.enabled`
+flipped, then the End for the E4b vanilla first-victory emission), or
+the artifacts controller phase (encounter structure, physical item
+flows, catastrophe effects, commands) — the persistence contract it
+rides is now committed and green.

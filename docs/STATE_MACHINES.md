@@ -145,3 +145,81 @@ E7):
 - **Boss victory** (entity with a live `DragonBattle`, never a bound pet)
   → the ADR-0014 observation window: mint per emerged gateway, fail-closed
   on ambiguity/miss/no-credited-killer.
+
+## Dimension-artifact lifecycle (implemented: rebellion-artifacts ArtifactService, ADR-0013)
+
+One state machine per artifact row (`rb_artifacts_registry.state`), plus the
+Rebellion-event occurrence machine. Every artifact transition is a single
+compare-and-set UPDATE inside one transaction, pinned on the expected prior
+state plus the row's live instance stamp (and holder, where the transition
+is holder-initiated) — never a blind write, never an INSERT (rows are seeded
+only by the idempotent load-time seed).
+
+```
+                    seed (INSERT-if-absent, dimension-keyed; config anchor sync)
+  (nothing) ─────────────────────────────────────────────► ORIGIN
+                                capture (CAS on state + live instance)  │
+  ORIGIN ◄── completeReturn ── RETURNING ◄── beginReturn ──┐            │
+    ▲                            ▲  ▲      (delay elapsed, │            │
+    │                            │  │       no active event)│           │
+    │                            │  └── voluntary return ──┼──┐         │
+    │                            │      (CAS holder+instance)  │        │
+    │                            └───────────────────────────┘│        │
+    │                            spendArtifacts (trigger holder   │    ▼
+    │                            holds all three; one tx)   ┌── HELD ◄─┘
+    │                                  │                    │   │ transfer (CAS
+    │                                  ▼                    │   │ holder+instance)
+    │                                 SPENT      admin route│   │
+    │                                  │          (stuck ──►HELD│   │
+    │                                  │          states)  │   │   │
+    │                              beginReturn ◄──────────┴─ LOST ◄─┘
+    │                                │       mark lost          │
+    │                                │                          find (CAS on
+    └────────────────────────────────┴── … cycle repeats; no terminal state,
+                                          no admin retirement, no permanent
+                                          winner …
+```
+
+| From | Event | To | Guard (CAS predicate) | Idempotency |
+|---|---|---|---|---|
+| — | seed (load) | ORIGIN | PK `artifact_key` INSERT-if-absent | re-seed → no-op, ids stable |
+| ORIGIN | capture | HELD | `state = 'ORIGIN' AND instance = presented` | clone/forged stamp → `INSTANCE_STALE`; re-capture → `INVALID_STATE` |
+| HELD | transfer | HELD | `state = 'HELD' AND holder = from AND instance = presented` | stale stamp → `INSTANCE_STALE`; wrong holder → `INVALID_STATE` |
+| HELD | mark lost | LOST | `state = 'HELD'` | re-park → `LOST_ALREADY` no-op (retry loops cannot wedge) |
+| LOST | find | HELD | `state = 'LOST' AND instance = presented` | forged stamp → `INSTANCE_STALE`; post-find clone → `INVALID_STATE` (not lost anymore) |
+| HELD | voluntary return | RETURNING | `state = 'HELD' AND holder AND instance presented` | stale stamp → `INSTANCE_STALE`; stranger → `INVALID_STATE` |
+| LOST/SPENT | begin return (delay elapsed, no active event) | RETURNING | `state IN ('LOST','SPENT') AND state_since_utc <= now − delay` | too early → `INVALID_STATE`; event active → `EVENT_ACTIVE`; in-transit → `RETURN_QUEUED` no-op |
+| RETURNING | complete return | ORIGIN | `state = 'RETURNING'` | re-arrival → `RETURN_NOOP` no-op |
+| LOST/RETURNING | admin route | HELD | `state IN ('LOST','RETURNING')` | ORIGIN/HELD → `INVALID_STATE` (realms are conquered, not granted) |
+| HELD ×3 | spend (via active event) | SPENT | `state = 'HELD' AND holder = trigger_holder`, all three in ONE transaction | refused set → rollback, `SPENT_CONFLICT`; retried spend → `SPENT_CONFLICT` ("already spent") |
+
+Holder semantics (enforced in the domain record and every CAS): HELD/LOST
+require a holder (LOST keeps the **last rightful holder**); ORIGIN/RETURNING/
+SPENT require NULL and clear `holder_since_utc` to 0.
+
+### Rebellion-event occurrence (same module)
+
+```
+  trigger (all three HELD by one player; guard CAS NULL → event id)
+  (nothing) ─────────────────────► ACTIVE ──── completeRebellion ────► COMPLETED
+                                     ▲  duplicate trigger/retry        │
+                                     └────── EVENT_ALREADY_ACTIVE ─────┘
+                                          (same occurrence, no new row)
+```
+
+- **Trigger idempotency is structural**: the singleton guard row
+  (`rb_artifacts_event_guard`) is compare-and-set from NULL to the new event
+  id; every loser re-reads the settled guard and resolves to
+  `EVENT_ALREADY_ACTIVE` carrying the existing occurrence. Duplicate
+  inventory events, retried listeners and racing observers cannot mint a
+  second row.
+- **Copy-proof qualification**: all three rows must be HELD by the same
+  player; an artifact copied by another plugin can never satisfy this
+  because a copy never wins a possession CAS.
+- **Spending is all-or-none** and restricted to the trigger holder; the
+  overpowering action rides this transition (catastrophe effects, warning
+  gating and health scars are controller-phase work, ADR-0013).
+- **No permanent winner**: after `COMPLETED` the guard is clear and a new
+  full possession (e.g. after the return sweep) mints a NEW durable event
+  id. Crashes mid-occurrence are recoverable: the ACTIVE row + guard
+  survive restarts (proven by the restart round-trip test).

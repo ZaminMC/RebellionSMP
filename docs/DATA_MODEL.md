@@ -211,3 +211,70 @@ Structural guarantees (all proven by `LineageServiceIT` over real SQLite):
 The in-memory mirror (by id / by egg instance / by entity / by gateway)
 is updated only after commit and rebuilt by `LineageService.loadAll()` at
 enable — same strategy as teams/wards.
+
+## Dimension-artifact registry (module key `artifacts`, migration v1 — ADR-0013)
+
+`rb_artifacts_registry` — **exactly one row per dimension artifact** (three
+rows, forever: `OVERWORLD`, `NETHER`, `END`):
+
+- `artifact_key VARCHAR(16) PK` — the dimension key; the stable identity.
+- `artifact_id CHAR(36)` — immutable server-issued UUID (`UNIQUE`); the PDC
+  identity of the physical item family.
+- `state VARCHAR(16)` — `ORIGIN`, `HELD`, `LOST`, `RETURNING` or `SPENT`.
+  Every transition is a compare-and-set UPDATE pinned on the expected prior
+  state plus the expected holder/live instance stamp.
+- `holder CHAR(36) NULL` — current holder (`HELD`) or last rightful holder
+  (`LOST`, kept for forensics and the admin route); NULL in the other three
+  states.
+- `instance CHAR(36)` — the live PDC instance stamp. Fresh on every
+  possession change (capture/find/transfer/voluntary return/arrival), so
+  cloned and stale copies can never win a possession CAS. In
+  `RETURNING`/`SPENT` the column holds the superseding stamp — whatever
+  physical copy is left over is inert.
+- `origin_world VARCHAR(64)`, `origin_x/origin_y/origin_z INT` — the
+  protected origin realm anchor. **Config-owned world-setup data**, not
+  gameplay state: `loadAll()` re-syncs these columns from `config.yml` on
+  every boot and touches nothing else.
+- `holder_since_utc BIGINT NOT NULL DEFAULT 0` — when the current holder
+  took possession (0 whenever the holder is NULL).
+- `state_since_utc BIGINT` — when the current state was entered; the
+  return-delay base for LOST/SPENT rows.
+- `created_at_utc`, `updated_at_utc BIGINT`.
+
+`rb_artifacts_audit` — append-only audit trail (`id CHAR(36) PK`,
+`artifact_key`, `action` ∈ {CAPTURE, TRANSFER, LOST, FOUND, RETURN_SUBMIT,
+RETURN_BEGIN, RETURN_COMPLETE, ADMIN_ROUTE, REBELLION_TRIGGER, SPEND,
+REBELLION_COMPLETE}, `actor` NULL for system actions, `detail
+VARCHAR(255)`, `at_utc`). One row per real mutation, written in the same
+transaction; idempotent no-ops write nothing. The seed writes no audit row —
+the trail starts at the first gameplay mutation. Indexed by `artifact_key`
+and `at_utc`.
+
+`rb_artifacts_events` — one row per Rebellion-event **occurrence**
+(`event_id CHAR(36) PK`, `trigger_holder`, `reason VARCHAR(255)` (the
+auditable initiation reason), `state` ∈ {ACTIVE, COMPLETED},
+`initiated_at_utc`, `completed_at_utc NULL`). Once per occurrence, not once
+per server: after completion a new full possession mints a NEW durable
+event id — no permanent winner.
+
+`rb_artifacts_event_guard` — a singleton row (`singleton INT PK` = 1)
+holding `active_event_id CHAR(36) NULL`. "At most one active occurrence" is
+enforced by the single-row-ness plus the acquire/release compare-and-sets,
+not by event-layer dedup code.
+
+Structural guarantees (all proven by `ArtifactServiceIT` over real SQLite):
+
+- **The seed is the only insert.** Rows are created only by the idempotent
+  load-time seed (PK backstop on `artifact_key`); every gameplay transition
+  is a pure UPDATE, so "exactly three" cannot drift, and a table that does
+  not hold exactly three rows fails the module load loudly.
+- **Never two valid copies.** Possession requires presenting the live
+  instance; every possession change supersedes it, so a copied artifact can
+  never move a row — which is what makes the Rebellion qualification
+  copy-proof without any dedup code.
+- **All-or-none spending.** The three spend CASes share one transaction; a
+  mid-set race rolls everything back to the typed `SPENT_CONFLICT`.
+
+The in-memory mirror (by key / by live instance, presentable states only)
+is updated only after commit and rebuilt by `ArtifactService.loadAll()` at
+enable — same strategy as teams/wards/dragons.

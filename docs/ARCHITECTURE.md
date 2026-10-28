@@ -378,3 +378,76 @@ budget (30/60 s, hard-validated ceiling 120), water weakness bounded
 for the ADR-0014 observer, and `ride.enabled: false` until the
 ride-feel interactive gate passes. `DragonsConfigTest` pins the shipped
 file and the `defaults()` factory to each other.
+
+## Artifacts module (rebellion-artifacts, Phase 6 groundwork — persistence layer only, ADR-0013)
+
+The three dimension-artifact state machines (master prompt §5.5). This
+slice is deliberately the ADR-0009 precedent: a serverless persistence
+layer with **no plugin wiring** — the module ships no `plugin.yml`, so it
+is not installable as a server plugin yet; the release pipeline builds and
+tests it and reports it under "not yet installable". The encounter
+structure, physical item flows, catastrophe effects, placeholders
+(`%rebellion_artifact_*`, master prompt §10) and commands are
+controller-phase work.
+
+**Authority**: `ArtifactService` — transactional registry + in-memory
+mirror (by dimension key / by live instance, presentable states only),
+same strategy as teams/wards/dragons (database is the durable authority;
+mirror updates only after commit; `loadAll` rebuilds at enable).
+
+**Seed path** (the only insert): `loadAll()` seeds exactly one row per
+dimension (`OVERWORLD`, `NETHER`, `END`) with an INSERT-if-absent whose PK
+backstop makes re-seeding a no-op, ensures the singleton guard row, and
+re-syncs the config-owned origin anchors from `config.yml`. There is no
+gameplay mint path anywhere; a table that does not hold exactly three rows
+fails the load loudly.
+
+**Possession is instance-stamped** (the anti-clone discipline): the
+physical artifact item carries the row's live `instance` UUID, and every
+possession change — `capture` (from the protected origin), `found` (of a
+lost artifact), `transfer` (between players), `returnToOrigin` (voluntary)
+— compare-and-sets on the presented stamp and supersedes it. Cloned, stale
+and forged copies resolve to `INSTANCE_STALE`; a copy can never move a row
+(never two valid copies).
+
+**Loss is recoverable**: `markLost` parks a held artifact in `LOST` with
+the last rightful holder kept for forensics (idempotent: `LOST_ALREADY`);
+the return pipeline (`beginReturn` gated on the configured delay + the
+active-event check, `completeReturn` restoring a fresh discoverable origin
+instance) is two individually idempotent CAS steps, so a crashed sweep at
+any cadence cannot double-apply. SPENT rows ride the same pipeline home —
+the lineage is never permanently invalidated and the SMP has no permanent
+winner.
+
+**Rebellion event**: `triggerRebellion` requires all three rows HELD by
+one player (default scope; `TEAM` is a loud unimplemented config error)
+and mints a durable occurrence through the singleton guard CAS — duplicate
+inventory events, retried listeners and racing observers all resolve to
+`EVENT_ALREADY_ACTIVE` carrying the same occurrence. `spendArtifacts` is
+the overpowering action's persistence half: the trigger holder's three
+CASes share one transaction (all-or-none, `SPENT_CONFLICT` on any miss).
+`completeRebellion` closes the occurrence and releases the guard; a new
+full possession afterwards mints a NEW durable event id.
+
+**Admin recovery**: `adminRoute` recovers stuck states only
+(`LOST`/`RETURNING` → `HELD`, fresh instance, audited). An ORIGIN artifact
+is refused — the protected realm must be conquered through its encounter,
+never bypassed by an admin grant; an HELD artifact is not the admin's to
+move.
+
+**Audit**: every real mutation appends `rb_artifacts_audit` rows in the
+same transaction (CAPTURE, TRANSFER, LOST, FOUND, RETURN_SUBMIT,
+RETURN_BEGIN, RETURN_COMPLETE, ADMIN_ROUTE, REBELLION_TRIGGER, SPEND,
+REBELLION_COMPLETE — one per affected artifact); idempotent no-ops write
+nothing; the seed writes nothing.
+
+**Persistence**: `rb_artifacts_registry` + `rb_artifacts_audit` +
+`rb_artifacts_events` + `rb_artifacts_event_guard` (module key
+`artifacts`, migration v1, portable SQLite/MySQL DDL). See
+`docs/DATA_MODEL.md` for column semantics and `docs/STATE_MACHINES.md`
+for the transition tables.
+
+**Config**: `ArtifactsConfig` — per-dimension origin anchors (config-owned
+world-setup data), the return delay, the rebellion-event toggle and
+trigger scope (§ CONFIGURATION.md). `ArtifactsConfigTest` pins the shipped
+file and the `defaults()` factory to each other.

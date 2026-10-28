@@ -66,6 +66,12 @@ its owning module has tests passing in `./gradlew test`.
 | Physical egg-item protection | rebellion-dragons | implemented (live-verify pending) | EggProtectionListener cancels damage/combust/despawn/hopper/dispense/portal for stacks carrying a LIVE egg-instance stamp; stale clones are inert by design (protection is stamp-based, not material-based) |
 | Pet lifecycle + reconciliation | rebellion-dragons | implemented (server-side) | direct kill -> killer receives egg (EntityDeathEvent); owner PvP death -> killer inherits egg + death presentation kill() after the CAS commits; EntityRemoveEvent(cause != UNLOAD) + 30s sweep reconcile vanished entities through the idempotent death CAS into the recovery mailbox |
 | /dragon + /dragonadmin command family | rebellion-dragons | implemented (console-verified) | hatch (PDC-stamped, holder-only, rollback on refused CAS), status, call (cooldown+range), mount, dismiss, attack (crosshair, budget, friendly refusal), claim; admin list/info/route/audit/retire with literal `confirm` keyword; DragonsPlaceholders: dragon_owned/id/health/count/cap (mirror reads only) |
+| Dimension-artifact registry: exactly three dimension-keyed rows (rb_artifacts_registry) | rebellion-artifacts | tested | ADR-0013; rows are created ONLY by the idempotent load-time seed (INSERT-if-absent per key, config-owned origin anchors re-synced every load); no gameplay mint path anywhere; a table not holding exactly three rows fails the load loudly |
+| Instance-stamped possession CAS (capture/transfer/found/voluntary return) | rebellion-artifacts | tested | ArtifactServiceIT (22, real SQLite): every possession change presents the live instance and supersedes it; cloned/forged/stale copies resolve INSTANCE_STALE and never move a row — never two valid copies |
+| Recoverable loss + return pipeline (LOST/SPENT -> RETURNING -> ORIGIN) | rebellion-artifacts | tested | idempotent markLost (LOST_ALREADY), beginReturn gated on the configured delay AND no active event, completeReturn restores a fresh discoverable origin instance; both sweep steps individually idempotent CAS so a crashed sweep cannot double-apply; SPENT rides the same pipeline home (no permanent winner) |
+| Rebellion event: once-per-occurrence, copy-proof (rb_artifacts_events + singleton guard) | rebellion-artifacts | tested | trigger requires all three HELD by one player (copied artifacts cannot qualify structurally); guard CAS makes duplicates/races resolve EVENT_ALREADY_ACTIVE carrying the same occurrence; spendArtifacts all-or-none in one transaction (SPENT_CONFLICT typed); completeRebellion releases the guard — a new full possession mints a NEW durable event id |
+| Admin route + audit trail | rebellion-artifacts | tested | adminRoute recovers stuck states only (LOST/RETURNING -> HELD; ORIGIN refused — the realm must be conquered, not granted); rb_artifacts_audit appends one row per affected artifact per real mutation; no-ops write nothing |
+| Artifacts config contract (origin anchors, return delay, event toggle + scope) | rebellion-artifacts | tested | ArtifactsConfigTest (10): shipped config.yml pinned to the defaults factory; anchor/delay bounds; TEAM trigger scope is a loud unimplemented error (§5.5 separate-option rule) |
 
 ## Roadmap (from master prompt §18)
 
@@ -77,7 +83,7 @@ its owning module has tests passing in `./gradlew test`.
 | 3 | Teams, chat, friendly-fire attribution | implemented + tested (unit level); module enable + migration live-verified; player flows (invites, chat) need interactive verification |
 | 4 | No-claim wards, calibrated distance, intel | implemented + tested (unit level); module enable + migration + persisted-ward load live-verified; km display disabled until calibrated; measured pipeline costs in docs/PERFORMANCE.md; ward walking/alert flows need interactive verification |
 | 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | spike delivered and executed live (ADR-0008: measured mount/steer/death/heal/fireball/persistence surface; bytecode-proven player-gated End fight); lineage registry + CAS idempotency delivered (ADR-0009); controller slice delivered (session 10): plugin wiring, pet controller, gateway observation (ADR-0014), egg protection, commands, placeholders, schema v2 — boot-verified on Paper 26.3 build 226; remaining interactive gates: client ride feel + vanilla first-victory emission (E4b) |
-| 6 | Three dimension artifacts + Rebellion event | planned |
+| 6 | Three dimension artifacts + Rebellion event | persistence layer delivered (session 11, ADR-0013): dimension-keyed registry, instance-stamped possession CAS, recoverable loss + return pipeline, once-per-occurrence Rebellion event — 32 tests, real SQLite; controller phase (encounter structure, physical item flows, catastrophe effects, commands, placeholders) is next |
 | 7 | Rare souls, rituals, tracking | planned |
 | 8 | Brewing progression, potion bags, automation | planned |
 | 9 | Prison, death scores, economy interface, rehab | planned |
@@ -212,3 +218,39 @@ Session additions (2026-10-28, dragons controller slice — session 10):
   CAS binds it; a refused CAS removes the spawn, but a crash between
   spawn and commit can leave one unbound dragon entity (harmless: it is
   a vanilla dragon; the sweep never touches unbound entities).
+
+Session additions (2026-10-28, artifacts persistence layer — session 11):
+
+- The long-pending PAT rotation completed first: the new token verified
+  (GET /user = 200 Abasing, full scopes), `ABASING_TOKEN` re-encrypted
+  and PUT (updated_at 04:40:34Z), git remote re-pointed — the credential
+  pair is consistent again and drives both pushes and releases.
+- Session 11 started as a recovery: the previous session's Phase 6
+  groundwork (ADR-0013 + rebellion-artifacts + five doc updates) was
+  found uncommitted in the tree after its context window overflowed
+  mid-flight. The code was audited against the master prompt §5.5
+  contract and ADR-0013, the full suite was rebuilt and force-rerun
+  (368 tests green: 336 baseline + 32 new), and the session completed
+  the unfinished docs pass (README module row, this ledger's rows +
+  roadmap, WORKLOG session 11) before committing.
+- Exactly-three is structural, the ADR-0009 pattern: rows are created
+  only by the idempotent load-time seed; there is no gameplay INSERT
+  anywhere; a corrupted table (count != 3) fails the load loudly rather
+  than being papered over.
+- Copy-proof possession: the physical item carries the row's live
+  instance UUID and every possession change supersedes it — a cloned or
+  forged copy resolves INSTANCE_STALE and can never move a row, which is
+  also what makes the Rebellion trigger immune to copied artifacts
+  without any event-layer dedup code.
+- The Rebellion event is once-per-occurrence by a singleton guard CAS:
+  duplicate inventory events, retried listeners and racing observers all
+  resolve to EVENT_ALREADY_ACTIVE carrying the same durable event id;
+  after completeRebellion a NEW full possession mints a NEW occurrence —
+  no permanent winner, no unbounded event spam.
+- Honest scope: this slice is serverless persistence only — the module
+  ships no plugin.yml (not installable), and the encounter/structure,
+  physical item flows, catastrophe effects (dimension instability,
+  health scars — Phase 9 profile surface), commands and placeholders
+  (`%rebellion_artifact_*`) are controller-phase work gated on the
+  interactive verification pass, exactly like ADR-0009 preceded the
+  dragons controller.

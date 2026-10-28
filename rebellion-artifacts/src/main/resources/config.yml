@@ -1,0 +1,66 @@
+# RebellionArtifacts configuration.
+#
+# Loaded and validated by net.zaminmc.rebellion.artifacts.ArtifactsConfig
+# (tested in ArtifactsConfigTest). Invalid values are loud load errors: the
+# module refuses to enable and Core reports the exact keys — nothing is
+# silently stretched or defaulted behind the operator's back.
+#
+# This module is the Phase 6 groundwork slice (ADR-0013): the three
+# dimension-artifact state machines — dimension-keyed registry,
+# instance-stamped possession, recoverable loss with a return pipeline, and
+# the idempotent Rebellion event. There is no plugin wiring yet (no
+# commands, listeners or physical item flows); this file ships now so the
+# persistence contract is visible to operators. Power cooldowns, catastrophe
+# effects and encounter tuning are deliberately absent until the
+# controller phase exists.
+#
+# See docs/decisions/ADR-0013-dimension-artifact-registry.md for the state
+# machine model.
+
+artifacts:
+  # Protected origin realm of each artifact: where it rests while ORIGIN,
+  # where the return pipeline brings it home, and where the discoverable
+  # encounter lives (encounter structure itself is controller-phase work).
+  # These anchors are CONFIG-OWNED world-setup data, not gameplay state:
+  # the service re-syncs the rows to these values on every load, so
+  # calibrating them when the map is imported is safe. Defaults use the
+  # conventional dimension world names and a spawn-ish anchor — an honest
+  # placeholder until the operator calibrates the realms.
+  origins:
+    overworld:
+      # Overworld artifact — theme of life/dominion.
+      world: world
+      x: 0
+      y: 64
+      z: 0
+    nether:
+      # Nether artifact — theme of fire/destruction/war.
+      world: world_nether
+      x: 0
+      y: 64
+      z: 0
+    end:
+      # End artifact — theme of void/knowledge/dimensional influence.
+      world: world_the_end
+      x: 0
+      y: 64
+      z: 0
+
+  return:
+    # How long a LOST or SPENT artifact must wait before the return sweep
+    # may route it back toward its protected origin (seconds). 0 makes a
+    # lost artifact return-eligible immediately. The sweep also refuses to
+    # run while a Rebellion event occurrence is active (the "event check",
+    # master prompt 5.5). Bounded at load to 0..2592000 (30 days).
+    delay-seconds: 3600
+
+  rebellion-event:
+    # Master switch for the Rebellion event trigger. When false, no
+    # occurrence can be triggered (FEATURE_DISABLED) until an operator
+    # re-enables it.
+    enabled: true
+    # Trigger scope. Only HOLDER is implemented: one player controlling all
+    # three unique artifacts. A team-wide scope must be a separate explicit
+    # configuration option (master prompt 5.5) and is rejected loudly here
+    # as unimplemented — never a silent stretch.
+    trigger-scope: HOLDER

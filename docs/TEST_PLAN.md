@@ -78,6 +78,24 @@ was run 3× consecutively with `--rerun-tasks` to confirm stability.
      probes the newly-used members. Remaining live-server portions:
      physical egg delivery/destruction routing, the boss-victory
      observation on a real kill, and the ADR-0008 interactive halves.
+   - Artifacts serverless portion: **automated** — `ArtifactServiceIT`
+     (real SQLite, 22 tests) covers the exactly-three seed and its
+     idempotency, config-owned anchor sync without touching gameplay
+     state, capture/transfer/find races (cloned + forged stamps lose),
+     idempotent loss recording, the return-delay gate + active-event
+     check, arrival idempotency, Rebellion qualification (two-of-three and
+     split holders refused), once-per-occurrence trigger idempotency
+     (duplicates resolve to the same event id), the disabled-toggle
+     refusal, all-or-none spending (refused set leaves every row
+     untouched; retried spend is a typed "already spent" conflict), guard
+     release + second occurrence (no permanent winner), admin routing of
+     stuck states only, audit-trail discipline (no-ops write nothing), and
+     the full restart round-trip (stamps, SPENT rows and the ACTIVE
+     occurrence survive). `ArtifactsConfigTest` (10) pins the shipped
+     config.yml, the defaults factory, anchor/delay bounds and the loud
+     TEAM-scope refusal. Remaining live-server portions: the encounter
+     structure, physical item flows, catastrophe effects and placeholders
+     — controller-phase work.
 5. **DB outage drills**: unique-asset creation under saturation = fail closed.
 
 ## Verified on Paper 26.3 (headless boot smoke, 2026-10-28)

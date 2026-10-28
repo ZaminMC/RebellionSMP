@@ -286,3 +286,57 @@ file and the `DragonsConfig.defaults()` factory to it):
   (`DragonsPlugin.onDisable`).
 - Retirement never frees slots and no config value can revive a retired
   lineage: retired rows keep consuming their slot and gateway anchor.
+
+### Artifacts (RebellionArtifacts — Phase 6 groundwork, ADR-0013)
+
+```yaml
+artifacts:
+  origins:
+    overworld:            # theme: life / dominion
+      world: world        # protected origin realm (calibrate on map import)
+      x: 0
+      y: 64
+      z: 0
+    nether:               # theme: fire / destruction / war
+      world: world_nether
+      x: 0
+      y: 64
+      z: 0
+    end:                  # theme: void / knowledge / dimensional influence
+      world: world_the_end
+      x: 0
+      y: 64
+      z: 0
+
+  return:
+    delay-seconds: 3600   # LOST/SPENT -> RETURNING eligibility (0 = immediate)
+
+  rebellion-event:
+    enabled: true         # master switch for the occurrence trigger
+    trigger-scope: HOLDER # only HOLDER is implemented; TEAM is a loud error
+```
+
+Load rules (validated by `ArtifactsConfigTest`, which also pins the shipped
+file and the `ArtifactsConfig.defaults()` factory to it):
+
+- `origins.<dimension>.world` must be `1..64` characters; `x`/`z` within
+  the world border (`|coord| <= 30 000 000`); `y` in `-64..320`. The
+  anchors are **config-owned world-setup data**: the service re-syncs the
+  registry rows to these values on every load and touches no gameplay
+  state, so calibrating the realms when the map is imported is safe. The
+  shipped defaults (conventional world names, a spawn-ish anchor) are
+  honest placeholders, not measurements.
+- `return.delay-seconds` must be `0..2 592 000` (30 days). `0` makes a
+  lost artifact return-eligible immediately. The sweep additionally
+  refuses to run while a Rebellion occurrence is active (the §5.5 "event
+  check").
+- `rebellion-event.enabled: false` disables the trigger entirely (typed
+  `FEATURE_DISABLED` refusal) until an operator re-enables it.
+- `rebellion-event.trigger-scope` accepts **HOLDER only**: one player
+  controlling all three unique artifacts. `TEAM` fails config load loudly
+  as unimplemented — master prompt §5.5 demands a team-wide trigger be a
+  separate explicit configuration option, never a silent stretch.
+- Power cooldowns, catastrophe effects, the optional world-wide purge
+  action and encounter tuning are deliberately absent until the
+  controller phase exists (the same discipline DragonsConfig held before
+  ADR-0008 landed).
