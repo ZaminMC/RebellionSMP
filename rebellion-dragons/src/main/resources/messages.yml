@@ -14,7 +14,7 @@ common:
   no-permission: "<red>You do not have permission to do that.</red>"
   unavailable: "<red>That action is unavailable right now; nothing was changed. Please try again in a moment.</red>"
 
-usage: '<gray>Usage: /dragon \<hatch|status|call|mount|dismiss|attack|claim> - dragons are a finite server-wide lineage (cap <cap>).</gray>'
+usage: '<gray>Usage: /dragon \<hatch|status|call|mount|dismount|dismiss|attack|claim> - dragons are a finite server-wide lineage (cap <cap>).</gray>'
 player-only: "<red>Dragon commands are player-only.</red>"
 
 dragon:
@@ -44,10 +44,13 @@ dragon:
     not-hatched: "<red>You have no living pet dragon to call.</red>"
     not-found: "<red>Your dragon's entity could not be resolved - it has been returned to its egg and routed to the recovery mailbox.</red>"
   mount:
-    disabled: "<red>Riding is disabled on this server (ride-feel verification pending).</red>"
-    ok: "<green>You mount your dragon. Look where you want to fly.</green>"
+    disabled: "<red>Riding is disabled on this server.</red>"
+    ok: "<green>You mount your dragon. Look where you want to fly; sneak (shift) or /dragon dismount to land.</green>"
     too-far: "<red>Your dragon is too far to mount - call it first.</red>"
     not-hatched: "<red>You have no living pet dragon to mount.</red>"
+    not-yours: "<red>Only this dragon's owner can ride it.</red>"
+  dismount:
+    ok: "<green>You dismount. Your dragon settles into a stable hover.</green>"
   dismiss:
     ok: "<green>Your dragon settles into a stable hover.</green>"
   attack:
@@ -67,7 +70,6 @@ feed:
   ok: "<green>Your dragon eats the pearl (+<amount> health).</green>"
   cooldown: "<red>Your dragon is still digesting (<seconds>s).</red>"
   not-owner: "<red>Only <owner> can feed this dragon.</red>"
-  wrong-item: "<gray>Right-click your dragon with an Ender Pearl to feed it.</gray>"
 
 egg:
   name: "<bold><gradient:#7d3fc9:#c0392b>Lineage Egg</gradient></bold> <dark_gray>#<slot></dark_gray>"

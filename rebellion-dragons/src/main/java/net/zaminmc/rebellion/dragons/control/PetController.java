@@ -81,8 +81,19 @@ public final class PetController {
      *  budget (<= maxPerWindow per dragon) and pruned by age on every hit. */
     private final Map<UUID, Launch> fireballs = new ConcurrentHashMap<>();
 
+    /** Impact breath-clouds left by plugin-launched fireballs: cloud uuid ->
+     *  cloud record. A friendly direct hit is cancelled wholesale, but a
+     *  hostile/neutral impact near the owner still leaves a lingering
+     *  vanilla cloud (E6); the damage shield resolves those by UUID. Bounded
+     *  by the fireball budget and pruned by age like the fireball set. */
+    private final Map<UUID, Cloud> breathClouds = new ConcurrentHashMap<>();
+
     /** One plugin fireball launch: the owning pet + the spawn stamp. */
     private record Launch(@NotNull UUID pet, long atUtc) {
+    }
+
+    /** One impact breath-cloud: the owning pet's owner + the spawn stamp. */
+    private record Cloud(@NotNull UUID owner, long atUtc) {
     }
 
     public PetController(@NotNull Plugin plugin, @NotNull LineageService lineages,
@@ -321,10 +332,11 @@ public final class PetController {
     }
 
     /**
-     * Mounts the owner onto their pet (ride config gate checked first: the
-     * client-side ride feel is an ADR-0008 interactive gate, so riding
-     * ships disabled). The platform state is the mounted base; the steer
-     * task takes over while the rider stays aboard.
+     * Mounts the owner onto their pet (ride config gate checked first).
+     * The platform state is the mounted base; the steer task takes over
+     * while the rider stays aboard. Re-clicking while already aboard is an
+     * idempotent OK — both the right-click interaction and the command can
+     * reach this path (horse-like: right-click to ride, sneak to land).
      */
     public MountOutcome mount(@NotNull Player owner) {
         if (!config.rideEnabled()) {
@@ -339,9 +351,13 @@ public final class PetController {
                 || pet.get().getLocation().distance(owner.getLocation()) > 24.0) {
             return MountOutcome.TOO_FAR;
         }
-        settle(pet.get());
-        if (pet.get().addPassenger(owner)) {
-            mounted.put(pet.get().getUniqueId(), owner.getUniqueId());
+        EnderDragon dragon = pet.get();
+        if (dragon.getPassengers().contains(owner)) {
+            return MountOutcome.OK; // already in the saddle
+        }
+        settle(dragon);
+        if (dragon.addPassenger(owner)) {
+            mounted.put(dragon.getUniqueId(), owner.getUniqueId());
             return MountOutcome.OK;
         }
         return MountOutcome.TOO_FAR;
@@ -500,6 +516,25 @@ public final class PetController {
         fireballs.entrySet().removeIf(e -> now - e.getValue().atUtc() > horizon);
     }
 
+    /** Records an impact cloud left by one of our fireballs (hit listener). */
+    public void trackCloud(@NotNull UUID cloudEntity, @NotNull UUID owner) {
+        breathClouds.put(cloudEntity, new Cloud(owner, System.currentTimeMillis()));
+        pruneFireballs();
+        pruneBreathClouds();
+    }
+
+    /** Owner of a plugin fireball impact cloud, when it is one of ours. */
+    public Optional<UUID> cloudOwner(@NotNull UUID cloudEntity) {
+        Cloud cloud = breathClouds.get(cloudEntity);
+        return cloud == null ? Optional.empty() : Optional.of(cloud.owner());
+    }
+
+    private void pruneBreathClouds() {
+        long now = System.currentTimeMillis();
+        long horizon = config.fireballWindowMs() * 2 + 30_000L;
+        breathClouds.entrySet().removeIf(e -> now - e.getValue().atUtc() > horizon);
+    }
+
     /** Fireball budget diagnostics for /dragon status. */
     public FireballBudget budgetView() {
         return budget;
@@ -592,34 +627,55 @@ public final class PetController {
      * </ol>
      */
     public void sweep() {
-        long now = System.currentTimeMillis();
         for (Lineage lineage : lineages.all()) {
-            if (lineage.state() != net.zaminmc.rebellion.dragons.LineageState.HATCHED) {
-                budget.forget(lineage.lineageId());
-                mounted.remove(lineage.entityUuid());
-                continue;
+            try {
+                sweepOne(lineage);
+            } catch (RuntimeException e) {
+                // One bad row must never abort snapshots/orphan checks for
+                // every other pet (the live NPE at sweep() proved how far a
+                // single row failure reaches): log the slot and continue.
+                plugin.getLogger().warning("lineage sweep failed for slot "
+                        + lineage.slot() + " (" + lineage.lineageId() + "): "
+                        + e.getMessage());
             }
-            UUID entityUuid = lineage.entityUuid();
-            if (entityUuid == null) {
-                continue;
+        }
+        pruneFireballs();
+        pruneBreathClouds();
+    }
+
+    private void sweepOne(@NotNull Lineage lineage) {
+        if (lineage.state() != net.zaminmc.rebellion.dragons.LineageState.HATCHED) {
+            budget.forget(lineage.lineageId());
+            // entityUuid is null for every non-HATCHED row (record
+            // invariant) and ConcurrentHashMap.remove(null) throws — the
+            // live NPE at PetController.sweep:599. Guarded so future states
+            // that retain a binding still clean the steer set safely.
+            UUID bound = lineage.entityUuid();
+            if (bound != null) {
+                mounted.remove(bound);
             }
-            Optional<EnderDragon> pet = dragon(entityUuid);
-            if (pet.isPresent()) {
-                persistNow(pet.get(), lineage);
-                continue;
-            }
-            if (chunkLoadedAt(lineage)) {
-                // Chunk loaded but entity missing: orphaned binding.
-                lineages.processDeath(lineage.lineageId(), entityUuid, Optional.empty())
-                        .thenAccept(r -> {
-                            if (r.mutated()) {
-                                plugin.getLogger().warning("lineage #"
-                                        + lineage.slot() + " entity " + entityUuid
-                                        + " vanished from a loaded chunk - returned to "
-                                        + "egg and routed to the recovery mailbox");
-                            }
-                        });
-            }
+            return;
+        }
+        UUID entityUuid = lineage.entityUuid();
+        if (entityUuid == null) {
+            return;
+        }
+        Optional<EnderDragon> pet = dragon(entityUuid);
+        if (pet.isPresent()) {
+            persistNow(pet.get(), lineage);
+            return;
+        }
+        if (chunkLoadedAt(lineage)) {
+            // Chunk loaded but entity missing: orphaned binding.
+            lineages.processDeath(lineage.lineageId(), entityUuid, Optional.empty())
+                    .thenAccept(r -> {
+                        if (r.mutated()) {
+                            plugin.getLogger().warning("lineage #"
+                                    + lineage.slot() + " entity " + entityUuid
+                                    + " vanished from a loaded chunk - returned to "
+                                    + "egg and routed to the recovery mailbox");
+                        }
+                    });
         }
     }
 

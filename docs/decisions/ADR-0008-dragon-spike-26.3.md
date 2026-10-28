@@ -314,7 +314,28 @@ reason is now proven from the 26.3 server bytecode rather than assumed:
   lineage CAS with the ~200-tick corpse window reserved for the death
   presentation; damage/health manipulation via `damage(amount, source)`,
   `setHealth` or `kill()` — never bare `damage()`.
-- The ride *feel* (client-side rider rendering) and the vanilla
-  first-victory emission (E4/E4b) remain the two interactive gates; the
-  harness is committed and ready for both. Until the ride-feel gate
-  passes, rideable behavior ships disabled by configuration.
+- The vanilla first-victory emission (E4/E4b) remains the one open
+  interactive gate; the harness is committed and ready.
+
+### Ride-feel gate — first live pass (session 12, 2026-10-28)
+
+The gate could never actually be exercised while riding shipped
+disabled-by-default, so the live operator pass opened it:
+
+- **Live report (Paper 26.3 build 227, RebellionDragons v0.1.0-dev.8):**
+  the persistence sweep NPE'd every 30 s once a second (non-HATCHED)
+  lineage existed — `mounted.remove(lineage.entityUuid())` with the
+  null `entityUuid` of egg-state rows (ConcurrentHashMap rejects null
+  keys). Fixed with a null guard + per-row fault isolation; also the
+  owner reported vanilla boss contact damage from their own pet and no
+  usable mount path.
+- **Consequences shipped in the same fix:** `ride.enabled` defaults
+  to `true` so the feel gate can be ridden; the mount interaction is
+  horse-like (owner right-click mounts, sneak lands, `/dragon dismount`
+  explicit); a friendly shield cancels pet contact damage + own
+  fireball impact-cloud damage on owner/teammates/rider; the steer
+  cadence default tightened from 8 to 4 ticks for responsiveness.
+- **Still interactive:** whether the client-side rendering/feel on the
+  large dragon body is acceptable without protocol work — the operator
+  rides the next dev build and reports back. Until then the ride row in
+  the ledger stays "live feel pass", not "verified".

@@ -9,7 +9,8 @@
 # on Paper 26.3 build 226 (docs/decisions/ADR-0008-dragon-spike-26.3.md):
 # mount platform, podium steering, fireball launch recipe, pearl-heal
 # arithmetic and the ~200-tick death window were all verified server-side.
-# The two remaining interactive gates are called out inline below.
+# The ride surface ships enabled for the live feel pass (session 12);
+# see the ride block below.
 
 dragons:
   # Maximum obtainable pet-dragon lineages across the ENTIRE server
@@ -48,15 +49,18 @@ dragons:
       hover-offset-blocks: 8
 
     ride:
-      # INTERACTIVE GATE (ADR-0008): the client-side ride FEEL on a large
-      # entity is not yet verified with a real player. The control loop is
-      # fully implemented (closed-loop podium steering, E2c) but ships
-      # DISABLED until the ride-feel gate passes. Flip to true only after
-      # verifying on a live 26.3 server.
-      enabled: false
+      # LIVE FEEL PASS (ADR-0008 interactive gate): the server-side mount/
+      # steering surface is proven (E1/E2c); the client-side feel is being
+      # exercised and tuned with live operator feedback (session 12).
+      # Enabled by default so the gate can actually be ridden; flip to false
+      # to switch the whole ride surface (command, right-click mount,
+      # steering task) off. Right-click the dragon to ride, sneak to land.
+      enabled: true
       # Closed-loop steering cadence (ticks). Each cycle re-targets the
-      # podium at the rider's look direction (measured ~16 blocks/s).
-      steer-interval-ticks: 8
+      # podium at the rider's look direction (measured ~16 blocks/s). 4
+      # ticks (0.2 s) keeps the loop responsive enough to feel like
+      # steering a horse; raise for a calmer cadence.
+      steer-interval-ticks: 4
       # How far ahead of the rider's eyes the podium target is placed.
       look-ahead-blocks: 48
 

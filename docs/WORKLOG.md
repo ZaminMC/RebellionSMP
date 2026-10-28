@@ -1199,3 +1199,80 @@ mechanics + signal rendering + commands + placeholders riding the
 committed ADR-0016 contract), or Phase 8 groundwork (brewing
 progression) — the persistence contract is committed and green either
 way.
+
+## 2026-10-28 — Session 14: live dragons hotfix — sweep NPE, friendly shield, horse-like riding opened for the feel pass
+
+**Branch:** `develop` · **Base:** `142758c` (v0.1.0-dev.9)
+
+**Context.** The live operator rode the first dev build on Paper 26.3
+build 227 (v0.1.0-dev.8) and reported three defects: a repeating
+`NullPointerException` in the dragons persistence sweep (every 30 s,
+Task #3, `PetController.sweep:599`), vanilla boss contact damage from
+the owner's own pet, and no usable mount/dismount path. The sweep NPE
+was structural: `mounted.remove(lineage.entityUuid())` runs for every
+non-HATCHED lineage, and egg-state rows carry a null `entityUuid` (the
+`Lineage` record invariant) — `ConcurrentHashMap` rejects null keys, so
+ONE egg-state row anywhere (the second minted lineage after the
+operator's "The Next Generation" egg pickup) aborted the whole sweep
+loop, silently disabling pet snapshots AND orphan reconciliation for
+every living pet. This is exactly the crash-recovery gap §5.6 forbids.
+
+**Fixes (rebellion-dragons):**
+
+1. `PetController.sweep` split into `sweepOne` with a null-guarded
+   mounted-cleanup (guarded against future states that retain a
+   binding) and per-row try/catch — a single bad row now logs its slot
+   and lineage id and the loop continues; fireball + breath-cloud
+   pruning ride the sweep.
+2. Friendly shield (`PetInteractListener.onPetHurtsFriendly`): damage
+   BY a bound pet is cancelled when the victim is the owner, a teammate
+   (teams module present) or the current rider; damage from the
+   lingering impact cloud of one of OUR fireballs is cancelled for the
+   owner's side — impact clouds that survive against hostile targets
+   are tracked by UUID (`trackCloud`/`cloudOwner`, age-pruned by the
+   same horizon as fireballs) because `EnderDragonFireballHitEvent`
+   cancellation only removes the cloud of the *cancelled* hit. Natural
+   boss dragons and foreign clouds keep vanilla semantics.
+3. Horse-like riding opened for the ADR-0008 feel gate: `ride.enabled`
+   now defaults to `true` (the gate could never be exercised while it
+   shipped disabled); the steer cadence default tightened 8 -> 4 ticks
+   (0.2 s look-loop latency); owner right-click without a pearl mounts
+   (`PlayerInteractEntityEvent`, off-hand follow-up suppressed);
+   re-clicking while aboard is an idempotent OK; sneak lands
+   vanilla-style; `/dragon dismount` added as the explicit equivalent
+   (eject + settle, the pet never flies on without its rider);
+   `feed.wrong-item` replaced by `dragon.mount.not-yours` for
+   non-owners; mount messages updated (shift-to-land hint).
+
+Also fixed in passing (blocking the tree from building at all): the
+rebellion-rpg WIP from session 13's in-flight controller slice had a
+compile error — `Math.floorMod(double, int)` does not exist;
+`SignalMath.compass8` now rounds into a `long` and uses
+`floorMod(long, long)` (negative north-half octants still wrap into
+[0, 8)).
+
+**Tests actually run:** `./gradlew build` — full suite **431 green, 0
+failed** (dragons: 27 across 5 classes incl. the updated
+DragonsConfigTest pinning `ride.enabled=true` + 4-tick cadence and
+DragonsMessagesTest pinning the new mount/dismount keys; rpg WIP tests
+green). Boot smoke not re-run (no descriptor changes); the definitive
+sweep verification is the operator's live log on the next dev build —
+no WARN stack traces from Task #3 and riding actually exercised.
+
+**Docs updated:** ADR-0008 (ride-feel gate section: live pass opened,
+findings + consequences), MASTER_LEDGER (pet controller + command rows),
+COMMANDS_AND_PERMISSIONS (mount row + dismount), config.yml/messages.yml
+comments rewritten honestly.
+
+**Honest scope.** Ride FEEL stays "live feel pass", not verified: the
+operator rides the next build and reports whether the client-side feel
+on the large body is acceptable without protocol work (ADR-0008's
+community-research caveat). One open risk deliberately NOT guessed at:
+whether a steered pet's body breaks non-End blocks on collision —
+vanilla dragon block-crunching outside the End is unverified and needs
+a live experiment before any claim either way.
+
+**Next task.** Operator rides the dev.10 build (sweep silence + ride
+feel report); then either continue the rebellion-rpg controller slice
+(ADR-0017, WIP classes already compile) or the E4b first-victory
+interactive pass.

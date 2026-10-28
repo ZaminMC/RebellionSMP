@@ -20,10 +20,14 @@ import org.bukkit.configuration.file.YamlConfiguration;
  *       interference; {@code heal(500)} clamps at max.</li>
  *   <li>The fireball budget honors master prompt §5.6: at most 30 fireballs
  *       per dragon per rolling 60-second window (stricter configurable).</li>
- *   <li>{@code ride.enabled} defaults to <strong>false</strong>: the
- *       client-side ride FEEL is one of the two remaining interactive gates
- *       (ADR-0008). The control loop ships disabled-by-configuration until
- *       that gate passes.</li>
+ *   <li>{@code ride.enabled} defaults to <strong>true</strong>: the
+ *       server-side ride surface is proven (ADR-0008 E1/E2c) and the
+ *       client-side feel is under live operator iteration (session 12
+ *       feedback: right-click mount + sneak dismount, horse-like). The
+ *       steer cadence default of 4 ticks doubles look-loop responsiveness
+ *       for that pass; both remain operator-tunable, and flipping
+ *       {@code enabled} back to false switches the whole ride surface
+ *       (command, interaction, steering task) off.</li>
  *   <li>The boss-victory gateway scan bounds are the only values here that
  *       are <em>not</em> measured: the vanilla gateway ring geometry on 26.3
  *       is observed interactively (ADR-0008 E4b). Defaults are generous
@@ -81,7 +85,7 @@ public record DragonsConfig(
      */
     public static DragonsConfig defaults(int maxLineages) {
         return new DragonsConfig(maxLineages, "DRAGON_EGG", 200.0, 12, 12,
-                512, 30, 8, false, 8, 48, 64.0, 30, 60, 2000L, 25.0, 10,
+                512, 30, 8, true, 4, 48, 64.0, 30, 60, 2000L, 25.0, 10,
                 1.25, true, 48, 160, 0, 256, 40, 90);
     }
 
@@ -144,8 +148,8 @@ public record DragonsConfig(
                     + (int) MAX_HATCH_OFFSET + " (got " + callHover + ")");
         }
 
-        boolean ride = yaml.getBoolean("dragons.pet.ride.enabled", false);
-        int steerInterval = yaml.getInt("dragons.pet.ride.steer-interval-ticks", 8);
+        boolean ride = yaml.getBoolean("dragons.pet.ride.enabled", true);
+        int steerInterval = yaml.getInt("dragons.pet.ride.steer-interval-ticks", 4);
         if (steerInterval < 1 || steerInterval > MAX_INTERVAL_TICKS) {
             issues.add("dragons.pet.ride.steer-interval-ticks: must be between 1 and "
                     + MAX_INTERVAL_TICKS + " ticks (got " + steerInterval + ")");

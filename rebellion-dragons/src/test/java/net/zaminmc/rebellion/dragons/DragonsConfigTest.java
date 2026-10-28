@@ -131,8 +131,10 @@ final class DragonsConfigTest {
         assertEquals(25.0, config.pearlHealAmount(), "E5 measured +25");
         assertEquals(30, config.fireballMaxPerWindow(), "§5.6 default budget");
         assertEquals(60, config.fireballWindowSeconds(), "§5.6 rolling window");
-        assertFalse(config.rideEnabled(),
-                "riding ships disabled until the ADR-0008 ride-feel gate passes");
+        assertTrue(config.rideEnabled(),
+                "riding ships enabled for the ADR-0008 live feel pass (session 12)");
+        assertEquals(4, config.steerIntervalTicks(),
+                "responsive closed-loop cadence for the live feel pass");
         assertEquals(1.25, config.waterWeaknessMultiplier(), "slight water penalty");
         // §5.6: pearl heal cooldown exists and is positive; call has one too.
         assertEquals(10_000L, config.pearlHealCooldownMs());

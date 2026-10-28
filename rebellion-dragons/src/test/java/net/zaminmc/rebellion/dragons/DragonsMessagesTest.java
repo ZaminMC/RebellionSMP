@@ -40,13 +40,14 @@ final class DragonsMessagesTest {
             "dragon.call.ok", "dragon.call.cooldown", "dragon.call.too-far",
             "dragon.call.not-hatched", "dragon.call.not-found",
             "dragon.mount.disabled", "dragon.mount.ok", "dragon.mount.too-far",
-            "dragon.mount.not-hatched",
+            "dragon.mount.not-hatched", "dragon.mount.not-yours",
+            "dragon.dismount.ok",
             "dragon.dismiss.ok",
             "dragon.attack.usage", "dragon.attack.no-target", "dragon.attack.ok",
             "dragon.attack.budget", "dragon.attack.interval",
             "dragon.attack.not-hatched", "dragon.attack.friendly",
             "dragon.claim.none", "dragon.claim.ok", "dragon.claim.not-yours",
-            "feed.ok", "feed.cooldown", "feed.not-owner", "feed.wrong-item",
+            "feed.ok", "feed.cooldown", "feed.not-owner",
             "egg.name", "egg.lore-1", "egg.lore-2",
             "egg.dropped", "egg.undeliverable",
             "victory.minted", "victory.cap",
@@ -86,7 +87,7 @@ final class DragonsMessagesTest {
     void usageTemplatesRenderLiteralAngleBrackets() {
         MessageCatalog catalog = MessageCatalog.parse(bundled()).catalog();
         assertTrue(plain(catalog.raw("usage"))
-                .contains("/dragon <hatch|status|call|mount|dismiss|attack|claim>"),
+                .contains("/dragon <hatch|status|call|mount|dismount|dismiss|attack|claim>"),
                 "usage must render escaped brackets as literal text");
         assertTrue(plain(catalog.raw("admin.usage")).contains("retire <slot> confirm"));
         assertTrue(plain(catalog.raw("admin.route.usage")).contains("<slot> <player>"));

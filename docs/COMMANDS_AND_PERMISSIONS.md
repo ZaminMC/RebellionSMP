@@ -209,7 +209,8 @@ targets from the server-side crosshair raytrace.
 | `hatch` | Hatches the lineage egg held in the main hand: spawns the pet in front/above the holder, binds it via the hatch CAS, consumes the egg only after the commit; a refused CAS (clone/stale/concurrent click) removes the spawn and keeps the egg | LineageService CAS + holder check |
 | `status` | Own lineage: state, health, last persisted position, pearl cooldown, fireball budget, gateway origin | mirror reads |
 | `call` | Recalls the living pet to a hover above the owner; per-owner cooldown; same-world range limit (cross-world always allowed); a pet whose chunk loads without it is reconciled into the recovery mailbox | in-memory cooldowns + persisted location |
-| `mount` | Mounts the owner onto their pet — **ships disabled** (`ride.enabled: false`) until the ADR-0008 ride-feel interactive gate passes | config gate + distance check |
+| `mount` | Mounts the owner onto their pet; the right-click interaction (no Ender Pearl held) is the horse-like equivalent. Enabled by default for the live feel pass (`ride.enabled: true`); re-clicking while aboard is an idempotent no-op | config gate + distance check |
+| `dismount` | Explicit rider dismount (sneak/shift already lands vanilla-style); ejects the rider and settles the pet so it never flies on alone | controller eject + settle |
 | `dismiss` | Dismounts riders and settles the pet into the stable HOVER platform | — |
 | `attack` | Fireball at the crosshair target within range; refuses owner/teammate targets; per-dragon rolling budget (default 30/60 s, hard ceiling 120) plus min-interval; vanilla impact semantics (no block damage, cloud on hit) | FireballBudget before spawn + hit-event cancellation |
 | `claim` | Reissues a recovery-mailbox lineage egg to its recorded claimant (fresh egg instance; pre-park clones stay inert) | claimant-gated CAS |

@@ -29,8 +29,10 @@ import org.jetbrains.annotations.NotNull;
  * {@code /dragon} — the player-facing pet lifecycle (master prompt §5.6
  * command family). Subcommands: {@code hatch} (held egg, holder-only),
  * {@code status}, {@code call} (cooldown + range), {@code mount}
- * (config-gated ride), {@code dismiss}, {@code attack} (crosshair target,
- * budgeted fireball), {@code claim} (recovery-egg mailbox).
+ * (config-gated ride; right-clicking the pet is the horse-like equivalent),
+ * {@code dismount}/{@code dismiss} (dismount + settle), {@code attack}
+ * (crosshair target, budgeted fireball), {@code claim} (recovery-egg
+ * mailbox).
  *
  * <p>Authority is never taken from client input: egg identity comes from
  * PDC stamps validated against the live mirror, target resolution from the
@@ -42,7 +44,8 @@ import org.jetbrains.annotations.NotNull;
 public final class DragonCommand implements CommandExecutor, TabCompleter {
 
     private static final List<String> SUBS =
-            List.of("hatch", "status", "call", "mount", "dismiss", "attack", "claim");
+            List.of("hatch", "status", "call", "mount", "dismount", "dismiss", "attack",
+                    "claim");
 
     private final LineageService lineages;
     private final PetController controller;
@@ -79,6 +82,7 @@ public final class DragonCommand implements CommandExecutor, TabCompleter {
             case "status" -> status(player);
             case "call" -> call(player);
             case "mount" -> mount(player);
+            case "dismount" -> dismount(player);
             case "dismiss" -> dismiss(player);
             case "attack" -> attack(player);
             case "claim" -> claim(player);
@@ -207,6 +211,16 @@ public final class DragonCommand implements CommandExecutor, TabCompleter {
             case NOT_HATCHED -> player.sendMessage(messages.msg("dragon.mount.not-hatched"));
             default -> player.sendMessage(messages.msg("common.unavailable"));
         }
+    }
+
+    /**
+     * Explicit dismount for the rider (sneak already dismounts vanilla-
+     * style; this is the command equivalent). Dismounting ejects and
+     * settles the pet so it never flies on without its rider.
+     */
+    private void dismount(Player player) {
+        controller.dismiss(player);
+        player.sendMessage(messages.msg("dragon.dismount.ok"));
     }
 
     private void dismiss(Player player) {
