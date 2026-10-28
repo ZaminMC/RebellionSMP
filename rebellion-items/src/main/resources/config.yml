@@ -42,3 +42,5 @@ gui_menus:
     file: item_codex.yml
   talisman_guide:
     file: talisman_guide.yml
+  ritual_guide:
+    file: ritual_guide.yml

@@ -27,8 +27,9 @@ its owning module has tests passing in `./gradlew test`.
 | Lore annotation (marker de-dup, metadata preservation, config-gated flows) | rebellion-items | tested | LorePlannerTest; stack-level behavior on Paper is a manual gate |
 | Talisman tier axis (NORMAL/ARTIFACT/RELIC, separate from rarity) | rebellion-items | tested | contract test |
 | DeluxeMenus-shaped menu engine (registry, validation, click safety) | rebellion-items | tested | MenuEngineTest; live-inventory interaction is a manual gate |
-| Bundled menus: item codex + talisman guide | rebellion-items | tested | parsed from disk in MenuEngineTest; first-boot extraction into the data folder live-verified (boot smoke) |
-| /rebellionitems inspect\|annotate\|reload\|status, /rebellionmenu <id> | rebellion-items | implemented | boot verified (menus extracted, /talismanguide + /itemcodex registered); player-level verification planned |
+| Menu placeholder rendering (%rebellion_...% per viewer, ADR-0018) | rebellion-items | tested | MenuText + MenuSubject.resolvePlaceholder + contributor-backed MenuHost pass; MenuTextTest; unresolved tokens stay visible |
+| Bundled menus: item codex + talisman guide + ritual guide | rebellion-items | tested | parsed from disk in MenuEngineTest (ritual guide pins its communion token); first-boot extraction into the data folder live-verified (boot smoke) |
+| /rebellionitems inspect\|annotate\|reload\|status, /rebellionmenu <id> | rebellion-items | implemented | boot verified (menus extracted, /talismanguide + /itemcodex + /ritualguide registered); player-level verification planned |
 | Annotation flows: block drops, crafting output, smithing output, container open | rebellion-items | implemented | config-gated (default off); event-bounded, no scans |
 | Placeholder contributor architecture (module-routed `rebellion` expansion) | rebellion-api + rebellion-core | implemented | api: PlaceholderContributor; core: CorePlaceholders routes via ServicesManager |
 | `%rebellion_rarity_<material>%` placeholder | rebellion-items | tested | pure registry read; junk input → null (PAPI leaves text untouched) |
@@ -104,9 +105,19 @@ its owning module has tests passing in `./gradlew test`.
 | %rebellion_ritual_<key>_discovered% | rebellion-rpg | implemented | join-loaded discovery cache (load on join, evict on quit, refreshed by grant paths); resolution is a pure in-memory read (PlaceholderContributor contract) |
 | Reconciliation sweep | rebellion-rpg | implemented | stale-claim release, encounter TTL expiry, soul-entity cleanup; runs every sweep-interval + once at disable; per-row fault isolation (session-12 sweep-NPE lesson) |
 
+### Session 15 additions (menu surface, ADR-0018)
+
+| Feature | Module | Status | Notes |
+|---|---|---|---|
+| Viewer-threaded contributor routing | rebellion-core | tested | CorePlaceholders routes unknown params with the requesting viewer (contributor.resolveFor) — live defect since session 3: every viewer-scoped module placeholder resolved null through PAPI; core params now answer both contract entries (resolve("version") was null too); injectable contributor source, pinned by CorePlaceholdersTest (viewer forwarding, null-viewer routing, self-exclusion, first-answer-wins) |
+| Menu placeholder rendering (rebellion-namespace tokens) | rebellion-items | tested | pure MenuText.substitution over menu_title/display_name/lore per viewer at open; MenuSubject.resolvePlaceholder (replaces the dead displayName hook); MenuHost asks registered contributors with the opening player, memoized per open; unresolved tokens stay visible raw text; MenuTextTest pins substitution/miss/verbatim/foreign-namespace rules |
+| Ritual guide menu (/ritualguide) | rebellion-items | implemented | menus/ritual_guide.yml + gui_menus registry entry; explains the three shipped rituals (numbers mirror rpg config.yml), casting flow and soul encounters; communion discovered-state rides %rebellion_ritual_ritual_soul_communion_discovered% per viewer; communion token pinned by MenuEngineTest so a knowledge-key rename fails loudly |
+| %rebellion_ritual_<key>_discovered% value wording | rebellion-rpg | tested | now returns the operator-localized ritual.list.state.known/unknown templates (MiniMessage-colored, the /ritual list vocabulary) instead of bare true/false; missing template resolves null (token stays raw); parameter shape + wording pinned serverless by RpgPlaceholdersTest |
+| Upgrade-path gui_menus merge (copyDefaults) | rebellion-items | tested | boot-smoke finding: setDefaults alone never merged new bundled registry entries into an existing install's config (probed against paper-api 26.3: getKeys ignores defaults without options().copyDefaults(true); scalar get* reads never consult bundled defaults); copyDefaults(true) now merges new section KEYS only — admin entries and scalar values keep full sovereignty, on-disk file never touched, module never saves config; pinned by three ItemsConfigTest upgrade cases |
+
 Player-level flows (reagent feel, signal pulse timing, live spawner on a
-calibrated map) remain interactive — honestly unclaimed until a player
-exercises them.
+calibrated map, opening /ritualguide as a player) remain interactive —
+honestly unclaimed until a player exercises them.
 
 ## Roadmap (from master prompt §18)
 
@@ -114,12 +125,12 @@ exercises them.
 |---|---|---|
 | 0 | Inspect, research, ledgers, ADRs | researched (this commit set) |
 | 1 | Foundation + module loader contracts | implemented + tested (unit level); boot verified on Paper 26.3 build 226 (ADR-0011) |
-| 2 | Item identity, rarity registry, lore service, talisman tiers, DeluxeMenus-shaped menus | annotation flows complete and opt-in; PAPI item placeholder shipped; custom item registry with talisman family examples shipped; module enable + menu extraction live-verified; remaining: per-menu open_command registration, admin audit/recovery views over inventories, talisman activation mechanics, player-level menu flows |
+| 2 | Item identity, rarity registry, lore service, talisman tiers, DeluxeMenus-shaped menus | annotation flows complete and opt-in; PAPI item placeholder shipped; custom item registry with talisman family examples shipped; module enable + menu extraction live-verified; per-menu open_command registration shipped (MenuCommandBridge, session 3); per-viewer menu placeholder rendering shipped (session 15, ADR-0018); remaining: admin audit/recovery views over inventories, talisman activation mechanics, player-level menu flows |
 | 3 | Teams, chat, friendly-fire attribution | implemented + tested (unit level); module enable + migration live-verified; player flows (invites, chat) need interactive verification |
 | 4 | No-claim wards, calibrated distance, intel | implemented + tested (unit level); module enable + migration + persisted-ward load live-verified; km display disabled until calibrated; measured pipeline costs in docs/PERFORMANCE.md; ward walking/alert flows need interactive verification |
 | 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | spike delivered and executed live (ADR-0008: measured mount/steer/death/heal/fireball/persistence surface; bytecode-proven player-gated End fight); lineage registry + CAS idempotency delivered (ADR-0009); controller slice delivered (session 10): plugin wiring, pet controller, gateway observation (ADR-0014), egg protection, commands, placeholders, schema v2 — boot-verified on Paper 26.3 build 226; remaining interactive gates: client ride feel + vanilla first-victory emission (E4b) |
 | 6 | Three dimension artifacts + Rebellion event | persistence layer delivered (session 11, ADR-0013) + controller slice delivered (session 12, ADR-0015): protected self-healing origin presentation + capture, item flows (steal/destruction -> recoverable loss), Rebellion observer + broadcast surface, config-gated purge (default off), /artifact + /artifactadmin, placeholders — 53 module tests, boot-verified (v0 -> v2 in one boot); remaining: the decorative encounter structure (operator map work) and the interactive pass (capture/steal/trigger/purge with real players); health scars stay Phase 9 (needs profiles) |
-| 7 | Rare souls, rituals, tracking | persistence layer delivered (session 13, ADR-0016): reserved ritual claims (reserve → inventory → all-or-none commit; stale sweep with refund digests), PK-idempotent discovery ledger, precision-stamped tracking sessions with mask degradation + derived expiry, counter-ritual effects, encounter ledger (cap/cooldown/TTL/one-winner rewards), event audit — 41 module tests (suite 430); remaining: controller phase (soul entities, inventory consumption, signal rendering, commands, placeholders, menus) and the interactive pass |
+| 7 | Rare souls, rituals, tracking | persistence layer delivered (session 13, ADR-0016): reserved ritual claims, PK-idempotent discovery ledger, precision-stamped tracking sessions with mask degradation + derived expiry, counter-ritual effects, encounter ledger (cap/cooldown/TTL/one-winner rewards), event audit; controller slice delivered (session 14, ADR-0017): soul spawner (born quiet until world calibration), /ritual claim-protocol driver, REGION signal rendering, /rpgadmin audit, placeholders, reconciliation sweep — 8th installable plugin, boot-verified; menu surface delivered (session 15, ADR-0018): per-viewer menu placeholder rendering + /ritualguide ritual guide; implementable scope COMPLETE — remaining: the interactive pass only (reagent feel, signal timing, wandering_soul calibration) |
 | 8 | Brewing progression, potion bags, automation | planned |
 | 9 | Prison, death scores, economy interface, rehab | planned |
 | 10 | Cosmetics-only rewards, optional map/voice integrations | planned |

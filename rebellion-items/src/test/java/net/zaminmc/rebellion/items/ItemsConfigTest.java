@@ -13,6 +13,57 @@ final class ItemsConfigTest {
         return ItemsConfig.load(yaml);
     }
 
+    /** The exact loadOrCreateConfig sequence (proven against paper-api 26.3). */
+    private YamlConfiguration upgradedAdminFile(String adminYaml) throws Exception {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.loadFromString(adminYaml);
+        YamlConfiguration defaults = new YamlConfiguration();
+        try (var in = ItemsConfigTest.class.getResourceAsStream("/config.yml")) {
+            defaults.loadFromString(new String(in.readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8));
+        }
+        yaml.setDefaults(defaults);
+        yaml.options().copyDefaults(true);
+        return yaml;
+    }
+
+    @Test
+    void upgradesGainNewlyBundledMenuRegistryEntries() throws Exception {
+        // A config.yml extracted before ritual_guide shipped (session 15's
+        // live boot-smoke finding: without copyDefaults the new bundled menu
+        // silently never registers on an existing install).
+        YamlConfiguration upgraded = upgradedAdminFile(
+                "gui_menus:\n  item_codex:\n    file: item_codex.yml\n");
+        var result = load(upgraded);
+        assertTrue(result.valid(), () -> result.issues().toString());
+        assertEquals(Map.of(
+                "item_codex", "item_codex.yml",
+                "talisman_guide", "talisman_guide.yml",
+                "ritual_guide", "ritual_guide.yml"), result.config().menuRegistry());
+    }
+
+    @Test
+    void adminRegistryEditsWinOverBundledDefaults() throws Exception {
+        // The admin retargeted one bundled menu to their own file: their value
+        // must survive the defaults merge untouched.
+        YamlConfiguration upgraded = upgradedAdminFile(
+                "gui_menus:\n  item_codex:\n    file: my_custom_codex.yml\n");
+        var result = load(upgraded);
+        assertTrue(result.valid(), () -> result.issues().toString());
+        assertEquals("my_custom_codex.yml", result.config().menuRegistry().get("item_codex"));
+    }
+
+    @Test
+    void scalarAdminSovereigntyIsPreservedUnderTheMerge() throws Exception {
+        // copyDefaults merges section KEYS; scalar reads still fall back to
+        // their method-arg default, never to the bundled value — an admin
+        // file predating a key keeps its (absent) choice.
+        YamlConfiguration upgraded = upgradedAdminFile(
+                "gui_menus:\n  item_codex:\n    file: item_codex.yml\n");
+        assertFalse(upgraded.getBoolean("menus.allow-console-actions", false),
+                "bundled scalar default must not leak through copyDefaults reads");
+    }
+
     @Test
     void bundledDefaultConfigIsValid() throws Exception {
         YamlConfiguration yaml = new YamlConfiguration();
@@ -32,7 +83,8 @@ final class ItemsConfigTest {
         assertFalse(result.config().allowConsoleActions());
         assertEquals(Map.of(
                 "item_codex", "item_codex.yml",
-                "talisman_guide", "talisman_guide.yml"), result.config().menuRegistry());
+                "talisman_guide", "talisman_guide.yml",
+                "ritual_guide", "ritual_guide.yml"), result.config().menuRegistry());
     }
 
     @Test

@@ -8,6 +8,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import net.zaminmc.rebellion.api.messages.MessageCatalog;
 import net.zaminmc.rebellion.api.placeholder.PlaceholderContributor;
 import net.zaminmc.rebellion.rpg.Discovery;
 import net.zaminmc.rebellion.rpg.RpgService;
@@ -20,16 +21,21 @@ import org.jetbrains.annotations.Nullable;
  * (master prompt §10):
  *
  * <ul>
- *   <li>{@code %rebellion_ritual_<key>_discovered%} — {@code true}/
- *       {@code false}: has the viewer discovered knowledge key
- *       {@code <key>}?</li>
+ *   <li>{@code %rebellion_ritual_<key>_discovered%} — the operator-localized
+ *       discovery-state wording for knowledge key {@code <key>}: the same
+ *       {@code ritual.list.state.known}/{@code unknown} vocabulary that
+ *       {@code /ritual list} renders, MiniMessage-colored so menus and PAPI
+ *       consumers that parse MiniMessage show it as designed. Before session
+ *       15 this returned a bare {@code true}/{@code false}.</li>
  * </ul>
  *
  * <p>Contract compliance (PlaceholderContributor): resolution is a pure
  * in-memory read — the viewer's discovery keys are loaded once per join
  * into {@link #cache} (and refreshed by every granting path), never per
- * placeholder request; unknown parameters return null; only the viewer's
- * own knowledge is ever exposed.</p>
+ * placeholder request; unknown parameters, a missing catalog template or a
+ * not-yet-loaded viewer return null (PlaceholderAPI and the menu engine
+ * both leave the text untouched in that case); only the viewer's own
+ * knowledge is ever exposed.</p>
  */
 public final class RpgPlaceholders implements PlaceholderContributor {
 
@@ -37,9 +43,12 @@ public final class RpgPlaceholders implements PlaceholderContributor {
     private final Map<UUID, CompletableFuture<Set<String>>> cache =
             new ConcurrentHashMap<>();
     private final RpgService service;
+    private final MessageCatalog messages;
 
-    public RpgPlaceholders(@NotNull RpgService service) {
+    public RpgPlaceholders(@NotNull RpgService service,
+            @NotNull MessageCatalog messages) {
         this.service = service;
+        this.messages = messages;
     }
 
     @Override
@@ -52,6 +61,22 @@ public final class RpgPlaceholders implements PlaceholderContributor {
         if (player == null) {
             return null;
         }
+        String key = parseKey(params);
+        if (key == null) {
+            return null;
+        }
+        CompletableFuture<Set<String>> known = cache.get(player.getUniqueId());
+        if (known == null || !known.isDone() || known.isCompletedExceptionally()) {
+            return null; // not loaded yet: PlaceholderAPI leaves the text untouched
+        }
+        return stateWord(known.join().contains(key), messages);
+    }
+
+    /**
+     * Parameter shape: {@code ritual_<key>_discovered} with the knowledge key
+     * in {@code [a-z0-9_]{1,32}}. Pure; anything else is null.
+     */
+    static @Nullable String parseKey(@NotNull String params) {
         String lower = params.toLowerCase(Locale.ROOT);
         if (!lower.startsWith("ritual_") || !lower.endsWith("_discovered")) {
             return null;
@@ -62,11 +87,18 @@ public final class RpgPlaceholders implements PlaceholderContributor {
         if (key.isEmpty() || !key.matches("[a-z0-9_]{1,32}")) {
             return null;
         }
-        CompletableFuture<Set<String>> known = cache.get(player.getUniqueId());
-        if (known == null || !known.isDone() || known.isCompletedExceptionally()) {
-            return null; // not loaded yet: PlaceholderAPI leaves the text untouched
-        }
-        return String.valueOf(known.join().contains(key));
+        return key;
+    }
+
+    /**
+     * The localized state wording a discovered/undiscovered key renders as.
+     * Pure; a missing catalog template yields null (the token stays raw
+     * text instead of lying about the viewer's state).
+     */
+    static @Nullable String stateWord(boolean discovered,
+            @NotNull MessageCatalog messages) {
+        return messages.template(discovered
+                ? "ritual.list.state.known" : "ritual.list.state.unknown");
     }
 
     /** Loads (or reloads) one viewer's discovery set (join + grant paths). */

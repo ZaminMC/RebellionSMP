@@ -24,8 +24,14 @@ public interface MenuSubject {
     /** Closes the subject's currently open menu. */
     void closeMenu();
 
-    /** @return display name for placeholder rendering (no SQL, memory only). */
-    default String displayName() {
-        return "";
+    /**
+     * Resolves one rebellion placeholder parameter for this subject: the
+     * {@code <params>} inside a {@code %rebellion_<params>%} menu token —
+     * the same shape the shared expansion receives. A pure in-memory read
+     * per the PlaceholderContributor contract; {@code null} leaves the
+     * token rendered as raw text.
+     */
+    default String resolvePlaceholder(String params) {
+        return null;
     }
 }

@@ -7,17 +7,16 @@ DeluxeMenus source (MIT) and its published wiki (inspected 2026-10-27; see
 REFERENCE_LEDGER). Gaps are listed as unsupported — no claims of full
 compatibility.
 
-## Deliberate deviations (documented, first release)
+## Deliberate deviations (documented)
 
-- Menus are opened through one fixed command `/rebellionmenu <menu-id>` with
-  per-menu permission `rebellion.items.menu.<menu-id>`; per-menu
-  `open_command` values are parsed and validated but are not individually
-  registered as top-level server commands yet (follow-up issue, tracked in
-  the ledger).
+- Per-menu `open_command` values ARE registered as live top-level server
+  commands (`MenuCommandBridge`, session 3), each gated by
+  `rebellion.items.menu.<menu-id>`; `/rebellionmenu <menu-id>` remains as the
+  fixed fallback.
 - `[sound]` actions use Minecraft sound registry keys (e.g.
   `ui.button.click`), not the deprecated legacy `Sound` constants.
 - `[console]` actions require BOTH `menus.allow-console-actions: true` and
-  the clicking player holding `rebellion.items.admin.menuconsole`.
+   the clicking player holding `rebellion.items.admin.menuconsole`.
 
 ## Registry pattern (supported)
 
@@ -57,6 +56,20 @@ Per item:
 | `left_click_requirement` / `right_click_requirement` | requirement before actions |
 | `left_click_commands` / `right_click_commands` | action lists |
 | item flags (e.g. `hide_attributes`) | documented subset |
+
+## Placeholders in menu text (session 15, ADR-0018)
+
+`menu_title`, `display_name` and every `lore` line resolve exactly one token
+shape per viewer at open time: `%rebellion_<params>%` — the same parameters
+the shared PlaceholderAPI expansion serves, answered by the registered
+`PlaceholderContributor` services with the opening player (no PlaceholderAPI
+install needed on this path). Tokens of other plugins/namespaces are never
+touched. An unresolved token stays as visible raw text — an operator sees
+their own typo or an absent module instead of a silently blank line. Values
+substitute verbatim, including MiniMessage tags, which then render. Click
+action payloads are not substituted (deliberate; no requirement demanded
+it). The shipped `ritual_guide.yml` menu is the reference example, riding
+RebellionRPG's `%rebellion_ritual_<key>_discovered%` per viewer.
 
 ## Requirements (planned supported types)
 

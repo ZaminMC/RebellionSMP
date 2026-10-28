@@ -1,10 +1,12 @@
 package net.zaminmc.rebellion.items.menu;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.zaminmc.rebellion.api.messages.MessageCatalog;
+import net.zaminmc.rebellion.api.placeholder.PlaceholderContributor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -37,6 +39,8 @@ public final class MenuHost implements InventoryHolder, MenuSubject {
     private final boolean consoleActionsAllowed;
     private final MessageCatalog messages;
     private final Logger logger;
+    /** Per-open memo so repeated tokens resolve once (renders are main-thread). */
+    private final Map<String, String> placeholderMemo = new HashMap<>();
 
     /** Creates the host and renders the visible items (view requirements applied). */
     public MenuHost(MenuSpec spec, Player player, boolean consoleActionsAllowed,
@@ -48,7 +52,8 @@ public final class MenuHost implements InventoryHolder, MenuSubject {
         this.messages = messages;
         this.logger = logger;
         this.inventory = Bukkit.createInventory(this, spec.size(),
-                MINI.deserialize(spec.title()));
+                MINI.deserialize(MenuText.placeholders(spec.title(),
+                        this::resolvePlaceholder)));
 
         for (Map.Entry<Integer, MenuSpec.ItemSpec> entry : bySlot.entrySet()) {
             ItemStack rendered = render(entry.getValue());
@@ -69,9 +74,13 @@ public final class MenuHost implements InventoryHolder, MenuSubject {
         }
         ItemStack stack = new ItemStack(material, item.amount());
         stack.editMeta(meta -> {
-            meta.displayName(MINI.deserialize(item.displayName()));
+            meta.displayName(MINI.deserialize(
+                    MenuText.placeholders(item.displayName(), this::resolvePlaceholder)));
             if (!item.lore().isEmpty()) {
-                meta.lore(item.lore().stream().map(MINI::deserialize).toList());
+                meta.lore(item.lore().stream()
+                        .map(line -> MenuText.placeholders(line, this::resolvePlaceholder))
+                        .map(MINI::deserialize)
+                        .toList());
             }
         });
         return stack;
@@ -188,5 +197,28 @@ public final class MenuHost implements InventoryHolder, MenuSubject {
     @Override
     public void closeMenu() {
         player.closeInventory();
+    }
+
+    /**
+     * First non-null answer from the registered contributors, asked with
+     * this viewer. Core is itself a registered contributor, so core
+     * parameters resolve here too; no PlaceholderAPI dependency exists on
+     * this path (the contributors ARE the shared contract). Resolutions are
+     * memoized per open: rendering happens once, on the main thread.
+     */
+    @Override
+    public String resolvePlaceholder(String params) {
+        return placeholderMemo.computeIfAbsent(params, this::lookupPlaceholder);
+    }
+
+    private String lookupPlaceholder(String params) {
+        for (var registration : Bukkit.getServicesManager()
+                .getRegistrations(PlaceholderContributor.class)) {
+            String answer = registration.getProvider().resolveFor(player, params);
+            if (answer != null) {
+                return answer;
+            }
+        }
+        return null;
     }
 }

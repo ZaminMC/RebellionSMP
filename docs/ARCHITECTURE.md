@@ -162,6 +162,17 @@ reported with an incident ID) → pool closed → services unregistered.
   `rebellion.items.admin.menuconsole`); sounds use registry keys, not the
   deprecated constants; menu visibility is not authorization (per-menu
   permission re-checked server-side at open and click time).
+- **Menu placeholders** (`MenuText`, ADR-0018): `menu_title`, item
+  `display_name` and `lore` resolve `%rebellion_<params>%` tokens per
+  viewer at open time, answered by the registered `PlaceholderContributor`
+  services with the opening player (core parameters included — no
+  PlaceholderAPI install needed on this path). Unresolved tokens stay as
+  visible raw text; foreign namespaces are never touched; values substitute
+  verbatim (MiniMessage tags render, `$`/backslash are never interpreted).
+  Click-action payloads are deliberately not substituted. The bundled
+  `ritual_guide.yml` menu rides RebellionRPG's discovery placeholder —
+  the menu data lives in the menu-owning module, the per-player state
+  comes through the shared contract, no module edge.
 
 ## Module health model
 
@@ -510,15 +521,18 @@ confirm|events`; `%rebellion_artifact_state_<key>%`,
 `%rebellion_artifact_holder_<key>%`, `%rebellion_artifact_event_active%`
 (mirror reads only; origin coordinates are never exposed).
 
-## RPG module (rebellion-rpg, Phase 7 groundwork — persistence layer only, ADR-0016)
+## RPG module (rebellion-rpg, Phase 7 — persistence ADR-0016 + controller ADR-0017 + menu surface ADR-0018)
 
 Rare souls, discoveries, rituals and player tracking (master prompt §5.3).
-The ADR-0009/ADR-0013 precedent a third time: a serverless persistence
-layer with **no plugin wiring** — the module ships no `plugin.yml` and is
-not installable yet. Soul entities, inventory ingredient removal, signal
-rendering (compass/particles), commands, placeholders
-(`%rebellion_ritual_<key>_discovered%`) and menus are controller-phase
-work riding this contract.
+Delivered in three slices: the ADR-0016 persistence layer (six tables under
+module key `rpg`, claim protocol, discovery ledger, tracking sessions,
+masks, encounter ledger), the ADR-0017 controller slice (soul spawner on
+pure SpawnRules + ledger-CAS authority, `/ritual` claim-protocol driver,
+REGION signal rendering, `/rpgadmin` audit, `%rebellion_ritual_<key>
+_discovered%` over a join-loaded cache, reconciliation sweep — the eighth
+installable plugin), and the ADR-0018 menu surface (`/ritualguide`, shipped
+in RebellionItems' menu engine, fed per viewer through this module's
+placeholder contributor).
 
 **Authority**: `RpgService` — future-based transactional orchestration over
 six tables (module key `rpg`). No in-memory mirror in this slice: every

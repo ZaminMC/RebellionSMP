@@ -23,7 +23,7 @@ final class MenuEngineTest {
             "DIRT", "BARRIER", "DIAMOND", "STONE", "IRON_INGOT", "HEART_OF_THE_SEA",
             "DIAMOND_SWORD", "ELYTRA", "DRAGON_EGG", "NETHERITE_INGOT", "NETHER_STAR",
             "ENCHANTED_GOLDEN_APPLE", "COPPER_INGOT", "AMETHYST_SHARD", "ECHO_SHARD",
-            "WRITABLE_BOOK");
+            "WRITABLE_BOOK", "ENDER_EYE", "ENCHANTED_BOOK", "SOUL_LANTERN");
 
     /** Records everything a MenuSubject invocation did. */
     private static final class RecordingSubject implements MenuSubject {
@@ -331,21 +331,34 @@ final class MenuEngineTest {
         try (var in = MenuEngineTest.class.getResourceAsStream("/menus/talisman_guide.yml")) {
             java.nio.file.Files.copy(in, menus.resolve("talisman_guide.yml"));
         }
+        try (var in = MenuEngineTest.class.getResourceAsStream("/menus/ritual_guide.yml")) {
+            java.nio.file.Files.copy(in, menus.resolve("ritual_guide.yml"));
+        }
         MenuRegistry registry = new MenuRegistry(menus, loader(),
                 java.util.logging.Logger.getLogger("test"));
         Map<String, String> registered = new HashMap<>();
         registered.put("item_codex", "item_codex.yml");
         registered.put("talisman_guide", "talisman_guide.yml");
+        registered.put("ritual_guide", "ritual_guide.yml");
         var result = registry.loadCandidate(registered);
         assertTrue(result.issues().isEmpty(), () -> result.issues().toString());
         assertTrue(registry.activate(result));
-        assertEquals(Set.of("item_codex", "talisman_guide"), registry.active().keySet());
+        assertEquals(Set.of("item_codex", "talisman_guide", "ritual_guide"),
+                registry.active().keySet());
         assertEquals(27, registry.active().get("item_codex").size());
         assertEquals(18, registry.active().get("talisman_guide").size());
+        assertEquals(27, registry.active().get("ritual_guide").size());
         // The bundled close button uses the [close] action.
         assertTrue(registry.active().get("talisman_guide").items().stream()
                 .flatMap(item -> item.leftClickActions().stream())
                 .anyMatch(action -> action.type() == MenuSpec.Action.Type.CLOSE));
+        // The ritual guide's discovery state rides the shared placeholder
+        // contract - a rename of the shipped knowledge key must fail loudly.
+        assertTrue(registry.active().get("ritual_guide").items().stream()
+                .flatMap(item -> item.lore().stream())
+                .anyMatch(line -> line.contains(
+                        "%rebellion_ritual_ritual_soul_communion_discovered%")),
+                "ritual_guide must carry the communion discovered-state token");
     }
 
     @Test

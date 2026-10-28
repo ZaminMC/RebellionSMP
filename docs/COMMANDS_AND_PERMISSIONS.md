@@ -51,6 +51,7 @@ arbitrary console passthrough and no "reset all players" utility.
 | `/rebellionitems` | `reload` | `rebellion.items.admin.reload` | yes | atomic reload of config + rarities + items + menus; on error the previous state stays active and every issue is printed |
 | `/rebellionitems` | `status` | `rebellion.items.admin.status` | yes | annotation mode, override count, registered menus |
 | `/rebellionmenu <menu-id>` | — | `rebellion.items.menu.<menu-id>` | no | opens a registered menu; per-menu permission is enforced server-side at open and click time (visibility is not authorization) |
+| `/<open_command>` (per menu) | — | `rebellion.items.menu.<menu-id>` | no | each menu YAML's `open_command` (e.g. `/itemcodex`, `/talismanguide`, `/ritualguide`) is registered as a live top-level command by MenuCommandBridge; same per-menu permission as `/rebellionmenu` |
 
 Items permission nodes (all default op unless noted):
 
@@ -59,6 +60,7 @@ Items permission nodes (all default op unless noted):
 | `rebellion.items.admin` | parent of the five admin nodes |
 | `rebellion.items.admin.menuconsole` | required (with the config flag) for `[console]` menu actions |
 | `rebellion.items.menu` | base permission for `/rebellionmenu` (default: true); each menu additionally checks `rebellion.items.menu.<menu-id>` |
+| `rebellion.items.menu.ritual_guide` | opens `/ritualguide`, the ritual guide over RebellionRPG's definitions (menu text resolves `%rebellion_...%` tokens per viewer; state lines need RebellionRPG installed) |
 
 There is deliberately no free-form item minting command: the admin annotate
 command only applies rarity/identity to a stack the admin already holds.

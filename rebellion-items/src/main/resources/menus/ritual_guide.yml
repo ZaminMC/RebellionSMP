@@ -1,0 +1,81 @@
+# Ritual guide: the Phase 7 menu/lore surface over RebellionRPG's ritual
+# definitions (master prompt §5.3/§18). Static lines explain the shipped
+# rituals; the viewer-scoped discovery state rides the shared placeholder
+# contract (%rebellion_ritual_<key>_discovered%, resolved per player at
+# open time by the menu engine). If RebellionRPG is absent the state
+# tokens render as raw text - honest rather than blank.
+# Numbers mirror rebellion-rpg's config.yml; edit both together.
+
+menu_title: "<gradient:#2e86de:#8e44ad>Ritual Guide</gradient>"
+size: 27
+open_command: ritualguide
+
+items:
+  introduction:
+    material: WRITABLE_BOOK
+    slot: 4
+    display_name: "<gold>The Ritual Arts</gold>"
+    lore:
+      - "<gray>Hold every reagent in your inventory, then cast.</gray>"
+      - "<gray>Reagents are consumed only when the ritual commits - a</gray>"
+      - "<gray>refused ritual consumes nothing and buys no cooldown.</gray>"
+      - "<dark_gray>See /ritual list for the live server state.</dark_gray>"
+    left_click_commands:
+      - "[message] <gray>Cast with /ritual cast|track|mask - /ritual list shows every ritual.</gray>"
+
+  tracking:
+    material: ENDER_EYE
+    slot: 11
+    display_name: "<aqua>Tracking Ritual</aqua>"
+    lore:
+      - "<gray>Reagents: 4 Echo Shards and 2 Diamonds.</gray>"
+      - "<gray>Feels one named player's rough direction and distance</gray>"
+      - "<gray>(region-tier: a compass bearing and a range band)</gray>"
+      - "<gray>for 30 minutes. One attempt per hour; one cast in four</gray>"
+      - "<gray>slips - reagents spent, cooldown bought, no signal.</gray>"
+      - "<dark_gray>Tracking never resolves a guessed name.</dark_gray>"
+    left_click_commands:
+      - "[message] <aqua>Usage: /ritual track tracking <player></aqua>"
+
+  soul_communion:
+    material: ENCHANTED_BOOK
+    slot: 13
+    display_name: "<light_purple>Soul Communion Ritual</light_purple>"
+    lore:
+      - "<gray>Reagents: 1 Book and 8 Lapis Lazuli.</gray>"
+      - "<gray>Settles the communion knowledge into your mind - once</gray>"
+      - "<gray>per day, never lost once learned.</gray>"
+      - "<gray>Communion: %rebellion_ritual_ritual_soul_communion_discovered%</gray>"
+    left_click_commands:
+      - "[message] <light_purple>Usage: /ritual cast soul_lore</light_purple>"
+
+  masking:
+    material: AMETHYST_SHARD
+    slot: 15
+    display_name: "<dark_purple>Counter-Mask Ritual</dark_purple>"
+    lore:
+      - "<gray>Reagents: 2 Amethyst Shards.</gray>"
+      - "<gray>Tracking cast against you reads one tier coarser</gray>"
+      - "<gray>for 60 minutes. One attempt per 2 hours; masks</gray>"
+      - "<gray>never stack - the strongest active mask wins.</gray>"
+    left_click_commands:
+      - "[message] <dark_purple>Usage: /ritual mask mask</dark_purple>"
+
+  soul_encounters:
+    material: SOUL_LANTERN
+    slot: 22
+    display_name: "<white>Soul Encounters</white>"
+    lore:
+      - "<gray>Rare souls wander calibrated lands at night.</gray>"
+      - "<gray>Help one and it may share a discovery - the same</gray>"
+      - "<gray>communion knowledge this ritual tree grows.</gray>"
+      - "<dark_gray>Ask an operator which souls walk this world.</dark_gray>"
+    left_click_commands:
+      - "[message] <white>Discoveries persist per player - /ritual status shows yours.</white>"
+
+  close:
+    material: BARRIER
+    slot: 26
+    display_name: "<red>Close</red>"
+    left_click_commands:
+      - "[close]"

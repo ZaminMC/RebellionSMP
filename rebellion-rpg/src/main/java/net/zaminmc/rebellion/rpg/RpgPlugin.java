@@ -113,7 +113,7 @@ public final class RpgPlugin extends JavaPlugin {
                             .current()::nextDouble);
             controller = new SoulController(this, service, config, controllerConfig,
                     messages);
-            placeholders = new RpgPlaceholders(service);
+            placeholders = new RpgPlaceholders(service, messages);
 
             modules.register(new ModuleDescriptor("rpg", "RebellionRPG",
                     getPluginMeta().getVersion()));

@@ -201,10 +201,20 @@ public final class ItemsModuleState {
         }
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file.toFile());
         // Fill in anything a newer bundled default adds, without overwriting admin edits.
+        // Proven against the pinned paper-api 26.3 (session 15 probe):
+        // setDefaults alone changes NOTHING for section enumeration, and
+        // copyDefaults(true) merges new bundled SECTION KEYS (gui_menus.<id>)
+        // into getKeys while scalar reads still fall back to their method-arg
+        // default, never to the bundled value — so admin-owned values keep
+        // full sovereignty, and this config is never saved back to disk, so
+        // copyDefaults' save-side copying can never touch the admin file.
+        // Net effect: upgrades gain newly shipped menus automatically; the
+        // on-disk file is never modified.
         try (var in = ItemsModuleState.class.getResourceAsStream("/config.yml")) {
             YamlConfiguration defaults = new YamlConfiguration();
             defaults.loadFromString(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
             yaml.setDefaults(defaults);
+            yaml.options().copyDefaults(true);
         }
         return yaml;
     }

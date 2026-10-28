@@ -1346,3 +1346,104 @@ No ride/feel claim is made for anything in this slice.
 report); the interactive pass for rpg (cast/track/mask with a real
 inventory, signal pulse, then calibrate + enable `wandering_soul` on
 the live map); or Phase 8 groundwork (brewing progression).
+
+## 2026-10-28 — Session 15: Phase 7 menu surface — viewer-threaded placeholders + the ritual guide (ADR-0018)
+
+**Goal.** Close Phase 7 is implementable scope: the roadmap §18 ends the
+phase at "the related menu/lore flows", and the session-15 investigation
+found the path blocked by two real defects rather than missing features.
+
+**What the investigation found (before writing any feature code):**
+
+1. `CorePlaceholders.route()` dropped the viewer: unknown parameters were
+   routed to module contributors through the player-independent
+   `resolve(params)` entry, so every viewer-scoped placeholder shipped by
+   teams/dragons/wards/rpg resolved null through PlaceholderAPI while the
+   module believed it had answered. Routing predates `resolveFor` (session
+   3 vs session 4) and was never threaded. A live defect since day one,
+   caught before any player beyond the operator ever saw a token.
+2. The menu engine had no placeholder pass at all: `MenuHost` rendered
+   MiniMessage but never substituted `%...%` tokens, and the
+   `MenuSubject.displayName()` hook designed for it sat unused (dead code).
+
+**Delivered:**
+
+1. **Core routing fix** (`CorePlaceholders`): contributor routing is
+   viewer-threaded (`resolveFor(player, params)` with the requesting
+   player; player-independent requests route with a null viewer, which
+   viewer-scoped contributors answer with null by contract). Core
+   parameters now answer both contract entries — the new
+   `CorePlaceholdersTest` exposed that `resolve("version")` returned null
+   too, an honest gap in the old code, now fixed. The contributor source
+   is injected (ServicesManager in production, a fixed list in tests), so
+   routing is unit-pinnable serverless: viewer forwarding, null-viewer
+   routing, self-exclusion, first-answer-wins.
+2. **RPG placeholder wording** (`RpgPlaceholders`):
+   `%rebellion_ritual_<key>_discovered%` now returns the
+   operator-localized `ritual.list.state.known/unknown` templates (the
+   exact `/ritual list` vocabulary, MiniMessage-colored) instead of a bare
+   `true`/`false`; a missing template resolves null so the token stays raw
+   rather than inventing wording. Parameter shape + wording pinned by the
+   new `RpgPlaceholdersTest`; the viewer-scoped resolution stays a live
+   path over the join-loaded cache.
+3. **Menu placeholder rendering** (`MenuText` + `MenuSubject` +
+   `MenuHost`): `menu_title`, `display_name` and every lore line resolve
+   `%rebellion_<params>%` per viewer at open time, answered by the
+   registered contributors with the opening player (core included — no
+   PlaceholderAPI install needed on this path). The pure `MenuText` pins:
+   unresolved tokens stay visible raw text (the operator sees their typo,
+   not a blank line), foreign namespaces are never touched, values
+   substitute verbatim (`$`/backslash safe, MiniMessage tags render).
+   Dead `displayName()` hook replaced by `resolvePlaceholder(params)`;
+   resolutions memoized per open. Click-action payloads deliberately not
+   substituted (documented). `MenuTextTest` pins the substitution rules.
+4. **The ritual guide menu** (`menus/ritual_guide.yml`, `open_command:
+   ritualguide`, permission `rebellion.items.menu.ritual_guide`): explains
+   the three shipped rituals (tracking / soul communion / masking —
+   numbers mirror rebellion-rpg config.yml), the casting flow and soul
+   encounters; the communion discovered-state line rides the placeholder
+   per viewer. Menu ships in the menu-owning module (items), data comes
+   through the shared contributor contract — the same data flow real
+   DeluxeMenus deployments use, no module edge (ADR-0001). If RebellionRPG
+   is absent the state line renders its raw token, documented in the file
+   header. `MenuEngineTest` pins the communion token so a knowledge-key
+   rename fails loudly; `ItemsConfigTest` pins the three-menu registry.
+
+**Docs:** ADR-0018; DELUXEMENUS_COMPATIBILITY (placeholder section + the
+stale open_command deviation note corrected — MenuCommandBridge shipped
+per-menu commands in session 3); ARCHITECTURE (menu-placeholder bullet,
+RPG section header refreshed from "persistence layer only" to the
+three-slice reality); MASTER_LEDGER (session-15 rows, phase-table rows 2
+and 7 — row 7 still claimed the controller phase was "remaining";
+COMMANDS_AND_PERMISSIONS (per-menu open_command family + ritual_guide
+permission).
+
+**Honest scope.** Phase 7 implementable scope is now complete
+(persistence ADR-0016 → controller ADR-0017 → menus ADR-0018). What
+remains is interactive: opening `/ritualguide` as a player, casting with a
+real inventory, signal pulse feel, the wandering_soul calibration, plus
+the standing dragons ride-feel report and E4b first-victory emission. No
+player-level menu flow is claimed verified.
+
+**Next task.** Phase 8 groundwork (brewing progression: level/XP
+persistence, recipe config surface — the persistence-first pattern a
+fifth time), or the operator-side calibration of wandering_soul + the
+interactive passes above.
+
+**Session 15 addendum — the boot smoke caught a second live defect.** The
+existing data folder (extracted by dev.9) booted with `menus: 2`:
+`ritual_guide.yml` never extracted because extraction is keyed by the
+data-folder config.yml registry, and `loadOrCreateConfig` called
+`setDefaults` without `options().copyDefaults(true)` — probed empirically
+against the pinned paper-api 26.3: `setDefaults` alone changes nothing for
+section `getKeys` enumeration (and scalar `get*` reads never consult
+bundled defaults at all). Fix: `copyDefaults(true)` at load — new bundled
+`gui_menus` section KEYS merge into an existing install (upgrades gain
+shipped menus automatically), admin-owned entries and scalar values keep
+full sovereignty, the on-disk file is never modified (the module never
+saves config.yml, so copyDefaults save-side copying cannot trigger). Three
+new ItemsConfigTest upgrade pins. Honest latent gap noted but not touched:
+a NEW SCALAR key in a future bundled config.yml will not apply to existing
+installs (Bukkit scalar reads ignore defaults) — modules must keep shipping
+method-arg fallbacks matching the bundled file, and the boot smoke covers
+the clean-first-boot case per release.
