@@ -291,3 +291,89 @@ survives occurrence completion. Migration v2 is an additive `ALTER TABLE`
 applied in one boot on first start (proven live: the smoke server's
 artifacts schema went v0 → v2 in one boot; the append-only migration-set
 guard is pinned by test).
+
+## RPG module (module key `rpg`, migration v1 — ADR-0016)
+
+Six tables under the `rb_rpg_` prefix; enum-string states, server-issued
+UUID keys, no auto-increment, portable SQLite/MySQL DDL. All mutations are
+compare-and-sets or PK-guarded inserts; every mutation transaction also
+writes its audit row into `rb_rpg_events`.
+
+### rb_rpg_discoveries — the discovery ledger
+
+`PRIMARY KEY (player_uuid, discovery_key)` — a player knows a ritual
+recipe or knowledge flag, idempotent by structure: the duplicate INSERT
+surfaces as a PK constraint violation and is classified into the typed
+no-op `ALREADY_KNOWN` (never an error). Columns: `player_uuid CHAR(36)`,
+`discovery_key VARCHAR(64)` (config-defined), `source VARCHAR(16)` ∈
+{ENCOUNTER, RITUAL, ADMIN}, `discovered_utc BIGINT`. There is no UPDATE
+path — a discovery is a fact.
+
+### rb_rpg_claims — the ritual claim anchor
+
+`PRIMARY KEY (claim_id)` — the two-phase transactional anchor that makes
+"consumed ingredients and ritual state changes are one logical operation"
+honest across the inventory/database boundary. Columns:
+`player_uuid CHAR(36)`, `ritual_key VARCHAR(64)`, `state VARCHAR(16)` ∈
+{RESERVED, COMMITTED, RELEASED} (all transitions CAS on `state`; no path
+back to RESERVED), `ingredients_digest VARCHAR(255)` (the controller's
+snapshot of the exact verified reagent set — refund evidence for the
+crash-between-removal-and-commit window), `created_utc BIGINT`,
+`resolved_utc BIGINT NULL`.
+
+Structural guarantees (proven by `RpgServiceIT` over real SQLite):
+
+- **Rate limit counts attempts of any state** (released attempts still
+  count — anti-abuse stays conservative), while **cooldown counts
+  COMMITTED attempts only** (a released reservation never bought a
+  cooldown).
+- **Single reservation per (player, ritual)** — the ingredient-race
+  backstop: two simultaneous casts over one reagent set cannot both hold
+  reservations.
+- **Session-cap refusal auto-releases** the claim in its transaction (the
+  one mutated refusal).
+
+### rb_rpg_tracking_sessions — tracking outcomes
+
+`PRIMARY KEY (session_id)`, `UNIQUE (claim_id)` — one session per
+committed claim, ever (re-delivery cannot mint a second). Columns:
+`caster_uuid CHAR(36)`, `target_uuid CHAR(36)` (offline players are legal
+targets; unknown names never reach persistence), `precision VARCHAR(16)`
+(the tier granted at cast time — DIMENSION/REGION/COORDINATE — the
+ceiling of what any signal may ever reveal), `began_utc`, `expires_utc`
+(**derived expiry**: a session resolves while unrevoked and unexpired; no
+state column, no sweep to forget), `revoked_utc BIGINT NULL` +
+`revoke_reason VARCHAR(64)` (admin/recovery revocation, own CAS).
+
+### rb_rpg_effects — counter-ritual effects
+
+`PRIMARY KEY (effect_id)` — time-bounded player effects; the in-slice
+key is `masking` (an active mask on the *target* degrades incoming
+tracking precision by exactly one tier at resolution time; masks do not
+stack — a second grant renews via its own later expiry). Columns:
+`player_uuid`, `effect_key VARCHAR(64)`, `granted_utc`, `expires_utc`
+(active = `expires_utc > now`; rows kept after expiry for forensics),
+`granted_by CHAR(36) NULL` (the counter-ritual caster; null = admin).
+
+### rb_rpg_encounters — the encounter ledger
+
+`PRIMARY KEY (encounter_id)` — the bookkeeping half of the rare-soul
+encounter state machine; the controller spawns entities only against a
+begun row. Columns: `encounter_key VARCHAR(64)` (config-defined),
+`world VARCHAR(64)`, `x/y/z INT` (spawn site), `state VARCHAR(16)` ∈
+{ACTIVE, COMPLETED, EXPIRED, DESPAWNED} (all transitions CAS; no path
+back to ACTIVE), `soul_entity CHAR(36) NULL` (attached by the controller
+once an entity exists; idempotent CAS), `began_utc`, `resolved_utc BIGINT
+NULL`, `completed_by CHAR(36) NULL`. The concurrency cap, encounter
+cooldown, TTL cleanup and one-winner reward claims are all answered from
+these rows — never from scheduler memory.
+
+### rb_rpg_events — append-only audit
+
+`PRIMARY KEY (event_key VARCHAR(128))` — deterministic server-composed
+keys: `claim:<uuid>:commit`, `claim:<uuid>:release`,
+`discovery:<player>:<key>`, `encounter:<uuid>:complete|attach|expire|
+despawn`, `session:<uuid>:revoke`. Columns: `player_uuid CHAR(36) NULL`,
+`type VARCHAR(32)`, `detail VARCHAR(255)`, `outcome VARCHAR(16)` (the
+durable commit outcome — what re-delivery reads back), `at_utc BIGINT`.
+Idempotent by construction; written inside the mutation's transaction.

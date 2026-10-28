@@ -308,3 +308,50 @@ wards 86, dragons 57, artifacts 53 — up from 32 by 8 config, 4 messages,
   steal/destruction/chest flows through real inventories, the trigger
   broadcast on a real third capture, the reminder/duration cadence under
   a live occurrence, and the purge kill loop with real online players.
+
+## RPG persistence layer (rebellion-rpg, ADR-0016 — serverless, session 13)
+
+- [x] `RpgServiceIT` (real SQLite through Core's actual DatabaseService +
+      MigrationRunner; injected clock + injected failure roll —
+      deterministic): discovery PK idempotency (DISCOVERED vs
+      ALREADY_KNOWN, original row untouched, single audit event) and bad
+      keys; the full claim protocol — reserve with digest, typed
+      refusals (UNKNOWN/DISABLED/ARGUMENT_INVALID), rate limit counting
+      released attempts, cooldown counting COMMITTED attempts only,
+      double-reservation guard, refund release idempotency + audit,
+      tracking commit (granted precision + duration stamped), the failure
+      roll spending the claim without a session (cooldown bought,
+      durable FAILED outcome), re-delivery no-ops carrying the original
+      outcome (SUCCESS and FAILED paths), wrong-commit-path rollback
+      leaving the reservation open, session-cap auto-release (mutated
+      refusal); mask composition — one-tier degradation (COORDINATE→
+      REGION), full erasure of a DIMENSION track, mask expiry restoring
+      precision with no sweep, session expiry derived; admin revocation
+      idempotency; knowledge-ritual idempotency (spent but nothing new
+      learned); the stale sweep releasing only old reservations; the
+      encounter ledger — lifecycle with one-winner rewards (loser earns
+      nothing), already-known rewards on a fresh encounter, typed guards
+      (UNKNOWN/DISABLED/WORLD), concurrency cap, ledger cooldown, TTL
+      sweep locking completion, admin despawn counting as resolved; and
+      the full restart round-trip (fresh DatabaseService over the same
+      file: discoveries, sessions, encounters and ongoing mutations
+      survive).
+- [x] `RpgConfigTest`: the documented YAML and `defaults()` pinned to
+      each other; missing sections; key grammar; unknown kind; ingredient
+      bounds (material/amount/air/empty); failure-chance bound (0.95
+      refused — a guaranteed-fail ritual is config nonsense);
+      precision/duration/rate/cooldown/session-cap bounds; KNOWLEDGE key
+      rules (required for KNOWLEDGE, refused elsewhere); encounter
+      validation (worlds/rewards/player-window/time-window/TTL/key);
+      the disabled encounter default; deterministic digest; the
+      precision-ordering contract the mask composition relies on;
+      case-insensitive world match.
+- Caught and fixed during the slice (test-first evidence): the
+  duplicate-PK INSERT surfaces as a constraint violation, not a zero
+  row-count (classified into the typed no-op in `RpgStore`), and
+  re-delivery originally resolved through a thrown refusal that lost the
+  durable original outcome (restructured so `COMMIT_NOOP` carries it).
+- Not yet applicable (no plugin surface): boot smoke, messages catalog,
+  player-level flows. The controller phase (souls, inventory, signals,
+  commands, placeholders) will gate on the interactive pass like every
+  module before it.

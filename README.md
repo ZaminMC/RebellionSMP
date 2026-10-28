@@ -19,8 +19,9 @@ Early development on the `develop` branch. Currently implemented:
 | RebellionWards | `RebellionWards-<version>.jar` | no-claim watch wards, calibrated distance, outsider alerts, countermeasures — tested |
 | RebellionDragons | `RebellionDragons-<version>.jar` | finite dragon lineages: 20-slot gateway-backed registry (ADR-0009), boss-victory gateway observation (ADR-0014), pet hatch/call/mount/steer/fire/heal controls on the ADR-0008-proven surface, protected lineage eggs, audited admin recovery — boot-verified on Paper 26.3; ride feel + vanilla first-victory emission are interactive gates (riding ships disabled) |
 | RebellionArtifacts | `RebellionArtifacts-<version>.jar` | three dimension artifacts (ADR-0013/0015): dimension-keyed registry seeded exactly once, instance-stamped possession CAS, protected self-healing origin presentation + capture, item flows (steal/destruction→recoverable loss), return pipeline, once-per-occurrence Rebellion event, config-gated world-wide purge (default off), /artifact + /artifactadmin, placeholders — boot-verified on Paper 26.3; player flows (capture/steal/purge) are interactive gates |
+| RebellionRPG | not installable yet | Phase 7 persistence layer (ADR-0016): reserved ritual claims (reserve→inventory→all-or-none commit, stale sweep with refund evidence), PK-idempotent discovery ledger, precision-stamped tracking sessions with mask degradation and derived expiry, time-bounded counter-ritual effects, encounter ledger (concurrency cap/cooldown/TTL/one-winner rewards), append-only event audit — 41 tests green; souls, inventory, signals and commands are controller-phase |
 
-Further modules (rituals, alchemy, prison, cosmetics) are planned —
+Further modules (alchemy, prison, cosmetics) are planned —
 see `docs/MASTER_LEDGER.md` for the phase roadmap and current status.
 
 ## Dev builds

@@ -1094,3 +1094,108 @@ flows (capture from the presentation, drop/steal/chest/destruction,
 the third-capture trigger broadcast, the purge with a real online
 set). Serverless alternative: Phase 7 groundwork (rare souls, rituals,
 tracking) or the items-module remaining surface.
+
+## 2026-10-28 — Session 13: Phase 7 groundwork — the rebellion-rpg persistence layer (ADR-0016)
+
+**Session context**
+
+Continued straight off session 12's released dev.8. The documented
+next-task choice was the interactive pass (blocked: needs a live player
+on the smoke server — now covering both dragons ride feel and the
+artifacts player flows) or serverless Phase 7 groundwork. The groundwork
+proceeded, per the standing rule that interactive gates stay open and
+honest while autonomous work continues.
+
+**Protocol**
+
+Pulled develop (bed8a1c, already up to date), master prompt md5
+a84a5323 unchanged, baseline verified green (389 tests), dev.8 release
+confirmed published with all 7 jars.
+
+**Decisions first (ADR-0016, new)**
+
+- §1 six tables under module key `rpg`: discoveries (PK-idempotent, no
+  UPDATE path), claims (the two-phase transactional anchor), tracking
+  sessions (UNIQUE claim; derived expiry — no swept state column),
+  effects (counter-ritual masks, derived expiry), encounters (the
+  ledger every spawn rule is answered from), events (append-only audit,
+  deterministic server-composed PKs).
+- §2 the claim protocol: reserve (DB first: definition + rate limit
+  counting any-state attempts + cooldown counting COMMITTED attempts
+  only + single-reservation race guard) → controller removes ingredients
+  only under a live reservation → commit (CAS + effect rows + audit,
+  all-or-none). Failure roll drawn ahead of the CAS, durable in the
+  event row: a losing roll spends the claim (failure is a cost, which is
+  what makes tracking contestable) but writes no session. Session-cap
+  refusal auto-releases inside the commit transaction — the one mutated
+  refusal. Stale sweep releases crash-orphaned reservations with the
+  digest as refund evidence.
+- §3 precision is an ordered enum stamped at cast (DIMENSION → REGION →
+  COORDINATE); masks degrade exactly one tier and never stack; session +
+  effect expiry are derived; offline players are legal targets; unknown
+  names never reach persistence.
+- §4 the encounter ledger: begin (definition + world + cap + cooldown
+  from rows), attach (idempotent), complete (one-winner CAS; rewards
+  ride the winner's transaction; unique claims = CAS + discovery PK),
+  TTL sweep, admin despawn as the unwedge path.
+- §5 config: rituals + encounters families, every bound validated
+  (failure chance must stay below 0.95 — a guaranteed-fail ritual is
+  config nonsense), the sample encounter ships **disabled** (spawn rules
+  are operator-calibrated world data; the wards calibrated-scale
+  precedent).
+
+**Implemented (16 main classes + 2 test classes, schema v1)**
+
+Domain: Precision, RitualKind, ClaimState, EncounterState, RpgOutcome,
+RpgResult (generic over four payload families), Discovery, RitualClaim,
+TrackingSession, PlayerEffect, Encounter, Ingredient, RitualDefinition,
+EncounterDefinition, RpgConfig. DB: RpgSchema v1 (6 tables + 7 indices),
+RpgStore (constants + CAS statements + typed ops; duplicate-PK inserts
+classified into typed no-ops). Service: RpgService — future-based
+transactions completing on the persistence executor (the
+teams/wards/dragons/artifacts convention), typed refusals thrown inside
+transactions (rollback) and unwrapped into results.
+
+**Verified**
+
+- Module suite: **41 tests green** (25 real-SQLite ITs + 16 config
+  tests), full suite **430 green**, stable across a forced rerun; the
+  seven sibling modules untouched.
+- The IT covers every §5.3 persistence invariant end-to-end including
+  the restart round-trip (fresh DatabaseService over the same file).
+
+**Caught live and fixed during the slice (test-first evidence)**
+
+1. The duplicate-PK discovery INSERT surfaces as a constraint violation
+   (SQLite + MySQL alike), not a zero row-count — `RpgStore` now
+   classifies unique violations into the typed `ALREADY_KNOWN` no-op
+   instead of letting them surface as DB_ERROR.
+2. Re-delivery of a commit originally resolved through a thrown refusal
+   that lost the durable original outcome — the pre-flight was
+   restructured so non-RESERVED claims resolve through the
+   event-carrying `COMMIT_NOOP` (the test demanded the original
+   SUCCESS/FAILED outcome in the detail).
+3. A session-cap auto-release originally threw its refusal *after*
+   writing the release — which would have rolled the release back with
+   the transaction. It now returns normally as a mutated refusal so the
+   release commits (the session-cap test pins the RELEASED state).
+
+**Honest scope**
+
+No plugin surface exists: no souls spawn, no inventory is touched, no
+signal is rendered, no command or placeholder exists. The module ships
+no plugin.yml (ADR-0009/0013 precedent) and is reported by the release
+pipeline as not yet installable. Biome/time/player-count evaluation,
+the NPC integration choice and preparation/cost surfaces are
+controller-phase decisions that need a live world.
+
+**Next task**
+
+Either the interactive pass (one player on the smoke server — dragons
+ride feel + E4b first-victory emission, artifacts capture/steal/trigger/
+purge flows, and eventually the RPG controller's player flows), or the
+RPG controller phase (soul entities + the inventory/ingredient
+mechanics + signal rendering + commands + placeholders riding the
+committed ADR-0016 contract), or Phase 8 groundwork (brewing
+progression) — the persistence contract is committed and green either
+way.

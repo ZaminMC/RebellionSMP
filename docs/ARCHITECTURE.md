@@ -509,3 +509,94 @@ no free text executes), `/artifactadmin list|info|route|audit|complete
 confirm|events`; `%rebellion_artifact_state_<key>%`,
 `%rebellion_artifact_holder_<key>%`, `%rebellion_artifact_event_active%`
 (mirror reads only; origin coordinates are never exposed).
+
+## RPG module (rebellion-rpg, Phase 7 groundwork — persistence layer only, ADR-0016)
+
+Rare souls, discoveries, rituals and player tracking (master prompt §5.3).
+The ADR-0009/ADR-0013 precedent a third time: a serverless persistence
+layer with **no plugin wiring** — the module ships no `plugin.yml` and is
+not installable yet. Soul entities, inventory ingredient removal, signal
+rendering (compass/particles), commands, placeholders
+(`%rebellion_ritual_<key>_discovered%`) and menus are controller-phase
+work riding this contract.
+
+**Authority**: `RpgService` — future-based transactional orchestration over
+six tables (module key `rpg`). No in-memory mirror in this slice: every
+read is a transaction against the durable authority, because nothing
+here needs entity presentation yet (mirrors exist where plugins need
+constant world-side lookups; the controller phase will add one if the
+signal renderer wants one).
+
+**The claim protocol** — how "ritual state changes and consumed
+ingredients are committed as one logical operation" is honored across the
+inventory/database boundary:
+
+1. `reserveRitual` (one transaction): definition exists + enabled, rate
+   limit (attempts of *any* claim state in the window — released attempts
+   count, deliberately conservative), cooldown (COMMITTED attempts only —
+   a released reservation never bought a cooldown), single-reservation
+   guard (the ingredient-race backstop: two simultaneous casts over one
+   reagent set cannot both hold reservations) → INSERT the RESERVED claim
+   with the controller's ingredient digest.
+2. The controller removes physical ingredients *only* under a live
+   reservation; refusal → `releaseReservation` (typed refund path,
+   idempotent).
+3. `commitTracking` / `commitCounterMask` / `commitKnowledge` (one
+   transaction): CAS RESERVED→COMMITTED together with the ritual's effect
+   rows (session / effect / discovery) and the audit event — all-or-none.
+   The failure roll (injected `DoubleSupplier`) is drawn ahead of the CAS
+   and only parameterizes the commit: a losing roll still spends the claim
+   (cooldown bought — failure is a cost, which is what makes tracking
+   contestable) but writes no session; the durable event outcome makes
+   re-delivery resolve to the original result. Commit-time permanent
+   refusals (session cap) auto-release the claim inside the same
+   transaction — a *mutated* refusal, the only kind that changes state.
+   `releaseStaleReservations` is the crash-recovery sweep; the per-claim
+   digest is the operator's refund evidence for the died-after-removal
+   window.
+
+**Tracking precision** — "must not reveal more precision than configured":
+`Precision` is an ordered enum (DIMENSION → REGION → COORDINATE); the
+granted tier is stamped on the session at cast time and only ever
+degrades. `resolveTracking` is the sanctioned read for signal rendering:
+for every unrevoked, unexpired session it composes the *effective* tier —
+an active `masking` effect on the target degrades it by exactly one step
+(a masked DIMENSION track resolves to nothing; masks never stack, they
+renew). Session and effect expiry are *derived* (`expires_utc`), so no
+sweep can be forgotten: an expired session stops resolving the moment
+time passes it. Offline players are legal targets (resolved UUID on the
+row); unknown names never reach persistence — the controller resolves
+names to known UUIDs first and releases on failure.
+
+**Encounter ledger** — the bookkeeping half of the rare-soul state
+machine: `beginEncounter` (definition + world + concurrency cap +
+encounter cooldown, all answered from rows, never scheduler memory),
+`attachSoul` (controller records the spawned entity; idempotent CAS),
+`completeEncounter` (one-winner CAS; the winner's transaction grants the
+configured reward discoveries — unique reward claims are the CAS plus the
+discovery PK; every other helper earns nothing), `expireEncounters` (the
+TTL cleanup), `despawnEncounter` (admin unwedge for rows whose definition
+disappeared; counts as resolved for cooldown). The future spawner
+inherits debuggability: every cap/cooldown decision is reconstructable
+from the ledger.
+
+**Audit**: `rb_rpg_events` — append-only, PK'd by deterministic
+server-composed keys (`claim:<uuid>:commit`, `claim:<uuid>:release`,
+`discovery:<player>:<key>`, `encounter:<uuid>:complete|attach|expire|
+despawn`, `session:<uuid>:revoke`); written inside the mutation's
+transaction, idempotent by construction.
+
+**Persistence**: `rb_rpg_discoveries` + `rb_rpg_claims` +
+`rb_rpg_tracking_sessions` + `rb_rpg_effects` + `rb_rpg_encounters` +
+`rb_rpg_events` (module key `rpg`, migration v1, portable SQLite/MySQL
+DDL). See `docs/DATA_MODEL.md` and `docs/STATE_MACHINES.md`.
+
+**Config**: `RpgConfig` — the `rituals` and `encounters` definition
+families (split per master prompt §11), every bound validated with
+collect-all issues. Shipped defaults are conservative but functional: one
+enabled `tracking` ritual, one enabled `mask` counter-ritual, one
+`soul_lore` knowledge ritual — and one `wandering_soul` encounter
+**disabled by default** (spawn rules are operator-calibrated world data;
+nothing auto-spawns from a stock install, the wards calibrated-scale
+precedent). `RpgConfigTest` pins the documented YAML and `defaults()` to
+each other.

@@ -78,6 +78,20 @@ its owning module has tests passing in `./gradlew test`.
 | Config-gated purge (ADR-0015 §4) | rebellion-artifacts | implemented (default-off) | quadruple runtime gate; once-per-occurrence purge_executed_utc CAS (schema v2) commits before the kill loop; ONLINE target set (STORED = loud unimplemented); holder spared per config; warning lead; typed PURGE_ALREADY_EXECUTED no-ops |
 | /artifact + /artifactadmin + placeholders | rebellion-artifacts | implemented (console-verified) | status/return/spend/purge with literal confirm keywords; admin list/info/route/audit/complete/events (boot-smoke rendered; the console caught the missing admin.info key before the suite did); artifact_state/holder/event_active placeholders (mirror reads, no origin exposure) |
 
+## RPG persistence layer (rebellion-rpg, Phase 7 groundwork — ADR-0016)
+
+| Feature | Owning module | Status | Notes |
+|---|---|---|---|
+| Ritual claim protocol (reserve -> inventory -> all-or-none commit) | rebellion-rpg | tested | RpgServiceIT over real SQLite; rate limit counts any-state attempts, cooldown counts COMMITTED only, single-reservation race guard |
+| Stale-reservation sweep with refund digests | rebellion-rpg | tested | crash-recovery path; per-claim release events keep the ingredient digest as operator refund evidence |
+| Failure roll as a durable outcome | rebellion-rpg | tested | losing roll spends the claim (cooldown bought) but writes no session; re-delivery reads the original outcome from the event row |
+| Discovery ledger (recipes + knowledge flags) | rebellion-rpg | tested | PK-idempotent inserts classified into typed no-ops; sources ENCOUNTER/RITUAL/ADMIN |
+| Tracking sessions with granted precision tiers | rebellion-rpg | tested | DIMENSION/REGION/COORDINATE stamped at cast; derived expiry (no sweep can be forgotten); UNIQUE claim_id = one session per commit |
+| Counter-ritual masks + effective-precision composition | rebellion-rpg | tested | mask degrades exactly one tier, never stacks; resolveTracking is the only sanctioned signal read |
+| Encounter ledger (cap/cooldown/TTL/one-winner rewards) | rebellion-rpg | tested | all rules answered from rows; admin despawn as the unwedge path; rewards ride the completion CAS |
+| Ritual/encounter definition config with collect-all validation | rebellion-rpg | tested | RpgConfigTest pins YAML<->defaults; disabled-by-default encounter (operator calibrates spawn rules) |
+| Module joins the build (serverless, no plugin.yml) | rebellion-rpg | tested | ADR-0009/0013 precedent; release pipeline builds + tests it, reports "not yet installable" |
+
 ## Roadmap (from master prompt §18)
 
 | Phase | Scope | Status |
@@ -89,7 +103,7 @@ its owning module has tests passing in `./gradlew test`.
 | 4 | No-claim wards, calibrated distance, intel | implemented + tested (unit level); module enable + migration + persisted-ward load live-verified; km display disabled until calibrated; measured pipeline costs in docs/PERFORMANCE.md; ward walking/alert flows need interactive verification |
 | 5 | Dragon lineage proof spike, then full dragon module (20 lineages) | spike delivered and executed live (ADR-0008: measured mount/steer/death/heal/fireball/persistence surface; bytecode-proven player-gated End fight); lineage registry + CAS idempotency delivered (ADR-0009); controller slice delivered (session 10): plugin wiring, pet controller, gateway observation (ADR-0014), egg protection, commands, placeholders, schema v2 — boot-verified on Paper 26.3 build 226; remaining interactive gates: client ride feel + vanilla first-victory emission (E4b) |
 | 6 | Three dimension artifacts + Rebellion event | persistence layer delivered (session 11, ADR-0013) + controller slice delivered (session 12, ADR-0015): protected self-healing origin presentation + capture, item flows (steal/destruction -> recoverable loss), Rebellion observer + broadcast surface, config-gated purge (default off), /artifact + /artifactadmin, placeholders — 53 module tests, boot-verified (v0 -> v2 in one boot); remaining: the decorative encounter structure (operator map work) and the interactive pass (capture/steal/trigger/purge with real players); health scars stay Phase 9 (needs profiles) |
-| 7 | Rare souls, rituals, tracking | planned |
+| 7 | Rare souls, rituals, tracking | persistence layer delivered (session 13, ADR-0016): reserved ritual claims (reserve → inventory → all-or-none commit; stale sweep with refund digests), PK-idempotent discovery ledger, precision-stamped tracking sessions with mask degradation + derived expiry, counter-ritual effects, encounter ledger (cap/cooldown/TTL/one-winner rewards), event audit — 41 module tests (suite 430); remaining: controller phase (soul entities, inventory consumption, signal rendering, commands, placeholders, menus) and the interactive pass |
 | 8 | Brewing progression, potion bags, automation | planned |
 | 9 | Prison, death scores, economy interface, rehab | planned |
 | 10 | Cosmetics-only rewards, optional map/voice integrations | planned |
@@ -287,3 +301,21 @@ Session additions (2026-10-28, artifacts controller slice — session 12):
   purged live. The decorative encounter structure (the build around the
   anchor) is operator map work; health scars are Phase 9 (profile
   surface); dimension-instability *effects* need live feel-tuning.
+
+Session additions (2026-10-28, RPG persistence layer — session 13):
+
+- rebellion-rpg joins the build as the Phase 7 groundwork module
+  (ADR-0016): six tables under module key `rpg`, all mutations CAS or
+  PK-guarded, everything exercised through the tested service surface —
+  no plugin descriptor, exactly the ADR-0009/0013 two-stage precedent.
+- The claim protocol is the slice's centerpiece: master prompt §5.3's
+  "one logical operation" is honored by making the database the authority
+  that moves first (reserve), letting the controller remove ingredients
+  only under a live reservation, and committing claim + effect rows +
+  audit all-or-none. Two live defects were caught by the tests before
+  they could ship: the duplicate-PK INSERT surfaces as a constraint
+  violation (not a zero row-count), and re-delivery originally lost the
+  durable original outcome through a thrown refusal.
+- The suite stands at 430 tests (389 + 41 new: 25 real-SQLite ITs + 16
+  config tests), stable across a forced rerun; the seven sibling modules
+  are untouched.

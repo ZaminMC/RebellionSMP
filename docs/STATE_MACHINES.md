@@ -241,3 +241,89 @@ The registry state machine is unchanged by the controller: every
 player-facing flow (capture click, pickup, chest take, destruction,
 voluntary return, spend) resolves onto the same ADR-0013 CAS transitions
 — the Bukkit events are routing, never authority.
+
+## Ritual claim lifecycle (implemented: rebellion-rpg RpgService, ADR-0016)
+
+One state machine per claim row (`rb_rpg_claims.state`). The two-phase
+anchor behind master prompt §5.3's "ritual state changes and consumed
+ingredients must be committed as one logical operation": the database is
+the authority and moves first; the controller may remove physical
+ingredients only while a live RESERVED claim exists.
+
+```
+ reserveRitual (tx: definition + rate limit + cooldown + single-reservation)
+   (nothing) ───────────────────────────────────────► RESERVED
+                                                        │
+                      controller removes ingredients ───┤ (controller phase)
+                      failure -> releaseReservation     │ success
+                                                        ▼
+   RELEASED ◄── releaseReservation / stale sweep ── RESERVED ── commit* ──► COMMITTED
+   (refund path; digest kept)                          (tx: CAS + effect rows
+                                                        + audit, all-or-none)
+```
+
+| From | Event | To | Guard (CAS predicate) | Idempotency |
+|---|---|---|---|---|
+| — | `reserveRitual` | RESERVED | rate limit (any-state attempts in window) + cooldown (COMMITTED only) + no open reservation | guard refusal typed; re-reserve after release OK |
+| RESERVED | `releaseReservation` | RELEASED | `state = 'RESERVED'` | re-release → `RELEASE_NOOP` |
+| RESERVED | stale sweep (`created_utc <= floor`) | RELEASED | `state = 'RESERVED' AND created_utc <= ?` | re-sweep → no-op |
+| RESERVED | commit (TRACKING/COUNTER_MASK/KNOWLEDGE) | COMMITTED | `state = 'RESERVED'` (CAS) + session cap for TRACKING | re-delivery → `COMMIT_NOOP` carrying the durable event outcome |
+| RESERVED | commit refused: session cap | RELEASED | auto-release **inside** the commit transaction | the one mutated refusal — refund path |
+
+Crash recovery: a crash between reserve and commit leaves a releasable
+reservation; the stale sweep releases it with the per-claim digest as the
+operator's refund evidence. The failure roll is drawn ahead of the CAS and
+parameterizes the commit: a losing roll still commits the claim (cooldown
+bought — failure is a cost) but writes no session; `RITUAL_FAILED` is
+durable in the event row so re-delivery resolves to the original result.
+
+## Tracking session + mask composition (implemented: rebellion-rpg, ADR-0016)
+
+Sessions have **no swept state column** — expiry is derived:
+
+```
+ commitTracking (success roll, tx)          now >= expires_utc (derived)
+   (nothing) ────────────────► RESOLVING ──────────────────────────► (inert)
+                                 │
+                                 │ revokeSession (admin, CAS on NULL stamp)
+                                 ▼
+                              REVOKED (terminal; reason kept)
+```
+
+`resolveTracking(caster)` is the sanctioned read for signal rendering:
+for each unrevoked, unexpired session the **effective precision** = the
+granted tier (stamped at cast), degraded by exactly one step when an
+active `masking` effect covers the target (`rb_rpg_effects`, derived
+expiry). COORDINATE→REGION→DIMENSION; a masked DIMENSION track resolves
+to nothing. Masks never stack — a second grant renews protection via its
+own later expiry. The controller may reveal *at most* the effective tier
+(never more precision than configured).
+
+## Encounter lifecycle (implemented: rebellion-rpg RpgService, ADR-0016)
+
+One state machine per encounter row (`rb_rpg_encounters.state`). Every
+rule that is state — concurrency cap, encounter cooldown, TTL cleanup,
+one-winner rewards — is answered from these rows, never scheduler memory.
+
+```
+ beginEncounter (tx: definition + world + cap + cooldown)
+   (nothing) ───────────────────────────► ACTIVE ── despawnEncounter (admin) ──► DESPAWNED
+                                           │ │
+             attachSoul (CAS, idempotent) │ │ completeEncounter (CAS, one winner
+                                           │ │   + reward discoveries in the same tx)
+                        TTL sweep began+ttl <= now │ │
+                                           ▼ ▼
+                                       EXPIRED  COMPLETED (resolved_utc + completed_by)
+```
+
+| From | Event | To | Guard (CAS predicate) | Idempotency |
+|---|---|---|---|---|
+| — | `beginEncounter` | ACTIVE | definition enabled + world allowed + ACTIVE count < cap + cooldown elapsed | typed refusals (UNKNOWN/DISABLED/WORLD/CAP/COOLDOWN) |
+| ACTIVE | `attachSoul` | ACTIVE | `state = 'ACTIVE' AND soul_entity IS NULL` | re-attach → `SOUL_ATTACH_NOOP` |
+| ACTIVE | `completeEncounter` | COMPLETED | `state = 'ACTIVE'` | second helper → `ENCOUNTER_ALREADY_RESOLVED`, **no reward** (unique claims = CAS + discovery PK) |
+| ACTIVE | TTL sweep | EXPIRED | `state = 'ACTIVE' AND began_utc <= now − ttl` | re-sweep → no-op; expired rows can no longer complete |
+| ACTIVE | `despawnEncounter` (admin) | DESPAWNED | `state = 'ACTIVE'` | unwedge tool; counts as resolved for cooldown |
+
+Crash recovery: every transition is an individually idempotent CAS that
+commits with its audit row; a crash leaves the pre- or post-transition
+state — both valid re-entry points.
